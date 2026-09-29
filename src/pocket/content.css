@@ -1,0 +1,4 @@
+#nicopocket-entry { display: block; clear: both; margin: 8px 0; }
+#nicopocket-entry button { padding: 10px 16px; border: 0; border-radius: 8px; background: #1769e0; color: #fff; cursor: pointer; font: inherit; }
+#nicopocket-entry button:focus-visible { outline: 3px solid #1769e0; outline-offset: 3px; }
+#nicopocket-entry button:disabled { opacity: .6; cursor: wait; }

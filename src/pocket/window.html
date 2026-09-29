@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NicoPocket 開発中</title>
+    <link rel="stylesheet" href="./window.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="titlebar">
+        <div class="brand"><img src="./assets/logo.svg" alt="" width="32" height="32" /><span><strong>NicoPocket</strong><small>にこぽけ</small></span></div>
+        <div class="titlebar-center">
+          <span class="development-badge">開発中 · 保存機能は未接続</span>
+          <button id="compact-progress" type="button" aria-label="実行一覧を開く" hidden>
+            <span id="compact-state"></span><progress id="compact-meter" max="100" value="0"></progress>
+            <span id="compact-detail"></span>
+          </button>
+        </div>
+        <button id="theme-toggle" type="button">ダークに切り替え</button>
+      </header>
+      <div class="app-body">
+        <aside class="sidebar" aria-label="メインナビゲーション">
+          <nav>
+            <button class="nav-item" type="button" data-view="basic" aria-current="page">基本情報</button>
+            <button class="nav-item" type="button" data-view="queue">実行一覧</button>
+            <button class="nav-item" type="button" data-view="settings">設定</button>
+          </nav>
+          <p>追加した動画は、このウィンドウを閉じるまで保持します。</p>
+        </aside>
+        <main>
+          <section class="view" id="view-basic" aria-labelledby="basic-title">
+            <div class="page-heading"><p class="eyebrow">CURRENT VIDEO</p><h1 id="basic-title">現在の動画を保存</h1><p>対象と今回の保存内容を確認します。</p></div>
+            <ol class="stepper" aria-label="保存確認ステップ">
+              <li><button type="button" data-view="basic" aria-current="step"><b>1</b>基本情報</button></li>
+              <li><button type="button" data-view="thumbnail"><b>2</b>サムネイル</button></li>
+              <li><button type="button" data-view="confirm"><b>3</b>最終確認</button></li>
+            </ol>
+            <section class="card" aria-labelledby="drafts-title">
+              <div class="section-heading"><h2 id="drafts-title">追加された動画候補</h2><p id="status" role="status">読み込み中…</p></div>
+              <ul id="drafts"></ul>
+              <div id="draft-editor" hidden>
+                <div class="selected-source"><strong id="selected-video-id"></strong><a id="selected-source" target="_blank" rel="noreferrer">取得元を表示</a></div>
+                <label for="draft-title">タイトル / ファイル名</label>
+                <input id="draft-title" type="text" maxlength="500" autocomplete="off" />
+                <div id="draft-options">
+                  <label>今回の音質<select name="quality"><option value="best">最高音質</option><option value="limit160">160 kbps 上限</option><option value="limit128">128 kbps 上限</option></select></label>
+                  <label><input type="checkbox" name="saveAac" />この動画の AAC も保存する</label>
+                  <label><input type="checkbox" name="saveJpeg" />この動画の JPEG も保存する</label>
+                </div>
+                <p class="filename">保存予定名: <output id="filename-preview"></output></p>
+                <details class="filename-rules"><summary>ファイル名の調整規則</summary><p>使えない文字は半角スペースに置換します: \ / : * ? " &lt; &gt; |</p></details>
+                <p id="draft-edit-status" role="status"></p>
+              </div>
+            </section>
+            <section class="card metadata" aria-labelledby="metadata-heading">
+              <h2 id="metadata-heading">M4A に保存するメタデータ</h2>
+              <dl><div><dt>title</dt><dd id="metadata-title">—</dd></div><div><dt>niconico_id</dt><dd id="metadata-video-id">—</dd></div><div><dt>source_url</dt><dd id="metadata-source-url">—</dd></div><div><dt>cover art</dt><dd id="metadata-cover">サムネイル未取得</dd></div></dl>
+            </section>
+            <div class="action-row"><button class="primary" type="button" data-view="thumbnail">サムネイルを確認 →</button></div>
+          </section>
+          <section class="view" id="view-thumbnail" aria-labelledby="thumbnail-title" hidden>
+            <div class="page-heading"><p class="eyebrow">THUMBNAIL</p><h1 id="thumbnail-title">サムネイル</h1></div>
+            <ol class="stepper" aria-label="保存確認ステップ">
+              <li><button type="button" data-view="basic"><b>1</b>基本情報</button></li>
+              <li><button type="button" data-view="thumbnail" aria-current="step"><b>2</b>サムネイル</button></li>
+              <li><button type="button" data-view="confirm"><b>3</b>最終確認</button></li>
+            </ol>
+            <section class="card" aria-labelledby="thumbnail-editor-title">
+              <h2 id="thumbnail-editor-title">正方形クロップの確認</h2>
+              <p class="editor-note">実サイトの画像取得は未接続です。選択中の候補に手元の画像を読み込み、クロップとJPEGプレビューを試せます。画像はこのウィンドウ内だけで扱い、保存ファイルにはまだ反映されません。</p>
+              <p id="thumbnail-target">対象動画なし</p>
+              <label class="thumbnail-input-label">確認用画像を選択（JPEG・PNG・WebP、20 MB以下）<input id="thumbnail-file" type="file" accept="image/jpeg,image/png,image/webp" disabled /></label>
+              <p id="thumbnail-status" role="status">画像がありません。</p>
+              <div id="thumbnail-workspace" hidden>
+                <div class="thumbnail-layout">
+                  <div class="thumbnail-stage" id="thumbnail-stage"><img id="thumbnail-image" alt="クロップ対象の確認用画像" draggable="false" /><div id="crop-box" class="crop-box" tabindex="0" role="group" aria-label="クロップ範囲。矢印キーで移動できます"><button type="button" data-corner="nw" aria-label="左上を動かして大きさを変更"></button><button type="button" data-corner="ne" aria-label="右上を動かして大きさを変更"></button><button type="button" data-corner="sw" aria-label="左下を動かして大きさを変更"></button><button type="button" data-corner="se" aria-label="右下を動かして大きさを変更"></button></div></div>
+                  <div class="thumbnail-tools"><div class="thumbnail-preview"><img id="thumbnail-preview" alt="選択範囲のJPEGプレビュー" hidden /></div><p id="thumbnail-coordinates"></p><div class="thumbnail-buttons"><button id="crop-center" type="button">中央へ戻す</button><button id="crop-max" type="button">最大サイズ</button><button id="crop-auto" type="button">自動再解析</button></div></div>
+                </div>
+              </div>
+            </section>
+            <div class="action-row"><button type="button" data-view="basic">基本情報へ戻る</button><button class="primary" type="button" data-view="confirm">最終確認へ →</button></div>
+          </section>
+          <section class="view" id="view-confirm" aria-labelledby="confirm-heading" hidden>
+            <div class="page-heading"><p class="eyebrow">FINAL CHECK</p><h1 id="confirm-heading">最終確認</h1></div>
+            <ol class="stepper" aria-label="保存確認ステップ">
+              <li><button type="button" data-view="basic"><b>1</b>基本情報</button></li>
+              <li><button type="button" data-view="thumbnail"><b>2</b>サムネイル</button></li>
+              <li><button type="button" data-view="confirm" aria-current="step"><b>3</b>最終確認</button></li>
+            </ol>
+            <section class="card"><h2 id="confirm-title">対象動画なし</h2><dl class="summary"><div><dt>保存予定名</dt><dd id="confirm-filename">—</dd></div><div><dt>音質</dt><dd id="confirm-quality">—</dd></div><div><dt>追加ファイル</dt><dd id="confirm-extras">—</dd></div><div><dt>ジャケット</dt><dd id="confirm-cover">未取得</dd></div></dl></section>
+            <p class="notice">音声・サムネイルの取得方式と保存処理は検証中です。保存開始はまだ利用できません。</p>
+            <p>保存先を変更する場合は、M4A・AAC・JPEGの保存画面で同じフォルダーを選んでください。M4Aで変更した名前は、AAC・JPEGにも使われます。</p>
+            <p><a href="https://account.nicovideo.jp/rules/account" target="_blank" rel="noopener noreferrer">ニコニコアカウントの公式利用規約を開く</a></p>
+            <div class="action-row"><button type="button" data-view="basic">基本情報を編集</button><button type="button" data-view="thumbnail">サムネイルを確認</button><button class="primary" type="button" disabled>保存を開始</button></div>
+          </section>
+          <section class="view" id="view-queue" aria-labelledby="queue-title" hidden>
+            <div class="page-heading"><p class="eyebrow">EXECUTION LIST</p><h1 id="queue-title">実行一覧</h1></div>
+            <section class="card"><p id="queue-status">実行項目はありません。保存処理は開発中です。</p><ul id="jobs" aria-label="実行項目"></ul></section>
+            <section class="card" id="save-recovery" hidden>
+              <h2>保存の終了確認</h2>
+              <p>前のウィンドウで終了を確認できなかった保存があります。同じ動画を再登録する前に、保存の状態を確認してください。</p>
+              <p id="save-recovery-status" role="status"></p>
+              <ul id="pending-saves" aria-label="終了未確認の保存"></ul>
+            </section>
+          </section>
+          <section class="view" id="view-settings" aria-labelledby="settings-title" hidden>
+            <div class="page-heading"><p class="eyebrow">PREFERENCES</p><h1 id="settings-title">設定</h1><p>変更は自動保存されます。</p></div>
+            <section class="card">
+              <form id="settings">
+                <label>デフォルトテーマ<select name="defaultTheme"><option value="light">ホワイト</option><option value="dark">ダーク</option></select></label>
+                <label>デフォルト音質<select name="defaultQuality"><option value="best">最高音質</option><option value="limit160">160 kbps 上限</option><option value="limit128">128 kbps 上限</option></select></label>
+                <label><input type="checkbox" name="detectThumbnail" />画像認識を使用する</label>
+                <label><input type="checkbox" name="saveAac" />AAC も保存する</label>
+                <label><input type="checkbox" name="saveJpeg" />加工済み JPEG も保存する</label>
+                <label>同時実行数<input type="number" name="concurrency" min="10" max="50" step="1" required /></label>
+                <label>圧縮失敗時の再試行回数<input type="number" name="compressionRetries" min="1" max="5" step="1" required /></label>
+                <label>警告の表示時間<select name="warningSeconds"><option value="5">5 秒</option><option value="10">10 秒</option></select></label>
+              </form>
+              <p id="settings-status" role="status">設定を読み込み中…</p>
+            </section>
+            <section class="card">
+              <h2>ライセンス</h2>
+              <p>フォーク元コードのライセンスを確認できます。同梱資産のライセンス情報は整理中です。</p>
+              <a href="../LICENSE" target="_blank" rel="noopener noreferrer">フォーク元のLICENSEを開く</a>
+            </section>
+          </section>
+        </main>
+      </div>
+    </div>
+    <div id="notification-stack" class="notification-stack" aria-live="polite"></div>
+    <script type="module" src="./assets/window.js"></script>
+  </body>
+</html>

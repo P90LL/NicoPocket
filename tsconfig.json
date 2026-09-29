@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": [
+      "ES2022",
+      "ES2022.Intl",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "skipLibCheck": true,
+    "types": [
+      "chrome"
+    ],
+    "rootDir": "src/pocket",
+    "outDir": ".build/pocket/assets",
+    "sourceMap": false
+  },
+  "include": [
+    "src/pocket/*.ts"
+  ],
+  "exclude": [
+    "src/pocket/content.ts"
+  ]
+}

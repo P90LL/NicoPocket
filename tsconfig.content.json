@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": [
+      "ES2022",
+      "ES2022.Intl",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "module": "None",
+    "moduleResolution": "Classic",
+    "strict": true,
+    "skipLibCheck": true,
+    "types": [
+      "chrome"
+    ],
+    "sourceMap": false,
+    "outFile": ".build/pocket/assets/content.js"
+  },
+  "files": [
+    "src/pocket/content.ts"
+  ]
+}

@@ -1,1 +1,90 @@
-test
+# このファイルの除外ルールは、Chrome/ と Safari/ を含む
+# リポジトリ内のすべてのサブディレクトリへ再帰的に適用します。
+
+# macOS
+**/.DS_Store
+**/.AppleDouble
+**/.LSOverride
+**/._*
+
+# Editors and local workspace settings
+**/.idea/
+**/.vscode/
+**/*.swp
+**/*.swo
+**/*~
+
+# Codex and agent-local settings
+**/.codex/
+**/.agents/
+**/AGENTS.local.md
+
+# Environment variables and local configuration
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.template
+**/*.local
+
+# Credentials, keys, and certificates
+**/*.key
+**/*.pem
+**/*.p12
+**/*.pfx
+**/*.jks
+**/*.keystore
+**/*.cer
+**/*.crt
+**/*.der
+**/*.mobileprovision
+**/credentials.json
+**/secrets.json
+
+# Logs, temporary files, and caches
+**/*.log
+**/logs/
+**/tmp/
+**/temp/
+**/.cache/
+**/.npm-cache/
+**/.parcel-cache/
+**/.eslintcache
+
+# JavaScript dependencies and build output
+**/node_modules/
+**/dist/
+**/build/
+**/coverage/
+**/.nyc_output/
+
+# Package-manager debug logs
+**/npm-debug.log*
+**/yarn-debug.log*
+**/yarn-error.log*
+**/pnpm-debug.log*
+
+# Browser extension packages and signing artifacts
+**/*.crx
+**/*.xpi
+**/*.zip
+**/web-ext-artifacts/
+
+# Local browser profiles and test data
+**/browser-profile/
+**/browser-profiles/
+**/chrome-profile/
+**/safari-profile/
+**/user-data/
+
+# Safari and Xcode generated files
+**/DerivedData/
+**/.build/
+**/xcuserdata/
+**/*.xcuserstate
+**/*.xccheckout
+**/*.xcscmblueprint
+
+# Test artifacts
+**/playwright-report/
+**/test-results/
+**/blob-report/

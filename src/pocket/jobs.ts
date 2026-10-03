@@ -217,7 +217,9 @@ export function applyJobEvent(jobs: Job[], event: JobEvent): Job[] {
       throw new Error("保存結果と登録時の選択が一致しません");
     }
     next = { ...current, status: event.warning ? "warning" : "complete",
-      percent: 100, stage: undefined, downloads, saveIssue: undefined, updatedAt: event.at };
+      percent: 100, stage: undefined, downloads, saveIssue: undefined,
+      summary: event.warning ? "保存は完了しました。音質調整またはジャケット処理の警告があります。" : undefined,
+      updatedAt: event.at };
   } else if (event.type === "error") {
     if (current.status !== "processing" || !jobErrorCodes.includes(event.code)) {
       throw new Error("エラー状態またはコードが正しくありません");

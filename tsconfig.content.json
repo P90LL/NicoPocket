@@ -7,15 +7,15 @@
       "DOM",
       "DOM.Iterable"
     ],
-    "module": "None",
-    "moduleResolution": "Classic",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "strict": true,
     "skipLibCheck": true,
     "types": [
       "chrome"
     ],
     "sourceMap": false,
-    "outFile": ".build/pocket/assets/content.js"
+    "noEmit": true
   },
   "files": [
     "src/pocket/content.ts"

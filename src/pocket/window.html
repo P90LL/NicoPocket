@@ -11,7 +11,7 @@
       <header class="titlebar">
         <div class="brand"><img src="./assets/logo.svg" alt="" width="32" height="32" /><span><strong>NicoPocket</strong><small>にこぽけ</small></span></div>
         <div class="titlebar-center">
-          <span class="development-badge">開発中 · 保存機能は未接続</span>
+          <span class="development-badge">開発中 · 実サイト保存は未検証</span>
           <button id="compact-progress" type="button" aria-label="実行一覧を開く" hidden>
             <span id="compact-state"></span><progress id="compact-meter" max="100" value="0"></progress>
             <span id="compact-detail"></span>
@@ -89,10 +89,11 @@
               <li><button type="button" data-view="confirm" aria-current="step"><b>3</b>最終確認</button></li>
             </ol>
             <section class="card"><h2 id="confirm-title">対象動画なし</h2><dl class="summary"><div><dt>保存予定名</dt><dd id="confirm-filename">—</dd></div><div><dt>音質</dt><dd id="confirm-quality">—</dd></div><div><dt>追加ファイル</dt><dd id="confirm-extras">—</dd></div><div><dt>ジャケット</dt><dd id="confirm-cover">未取得</dd></div></dl></section>
-            <p class="notice">音声・サムネイルの取得方式と保存処理は検証中です。保存開始はまだ利用できません。</p>
+            <p class="notice">実サイトでの取得・保存は検証中です。1件の音声入力は128 MiBまでです。画像がない場合は警告付きで音声を保存します。</p>
             <p>保存先を変更する場合は、M4A・AAC・JPEGの保存画面で同じフォルダーを選んでください。M4Aで変更した名前は、AAC・JPEGにも使われます。</p>
             <p><a href="https://account.nicovideo.jp/rules/account" target="_blank" rel="noopener noreferrer">ニコニコアカウントの公式利用規約を開く</a></p>
-            <div class="action-row"><button type="button" data-view="basic">基本情報を編集</button><button type="button" data-view="thumbnail">サムネイルを確認</button><button class="primary" type="button" disabled>保存を開始</button></div>
+            <p id="start-status" role="status"></p>
+            <div class="action-row"><button type="button" data-view="basic">基本情報を編集</button><button type="button" data-view="thumbnail">サムネイルを確認</button><button class="primary" id="start-save" type="button">保存を開始</button></div>
           </section>
           <section class="view" id="view-queue" aria-labelledby="queue-title" hidden>
             <div class="page-heading"><p class="eyebrow">EXECUTION LIST</p><h1 id="queue-title">実行一覧</h1></div>

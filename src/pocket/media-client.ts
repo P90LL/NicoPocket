@@ -2,7 +2,7 @@ import { compressionTarget, measureAdtsBitrate } from './audio-quality.js';
 import type { LocalHlsInput } from './hls-local-input.js';
 import type { MuxInput } from './media-mux.js';
 
-export type MuxOutput = { m4a: Uint8Array; aac: Uint8Array; warnings: string[];
+export type MuxOutput = { m4a: Uint8Array; aac: Uint8Array; warnings: string[]; coverEmbedded: boolean;
   compressed: boolean; sourceBitrate: number; outputBitrate: number; compressionAttempts: number };
 type WorkerTask = { kind: 'mux'; input: MuxInput } | { kind: 'compress'; aac: Uint8Array; target: 128000 | 160000 }
   | { kind: 'extract-hls'; hls: LocalHlsInput };
@@ -33,7 +33,9 @@ function runTask(task: WorkerTask, signal?: AbortSignal): Promise<Uint8Array> {
 }
 
 /** Use the original AAC when under cap or after exhausted compression retries. */
-export async function muxAacToM4a(input: MuxInput, options: { signal?: AbortSignal } = {}): Promise<MuxOutput> {
+export async function muxAacToM4a(input: MuxInput, options: {
+  signal?: AbortSignal; onStage?: (stage: 'encode' | 'mux') => void
+} = {}): Promise<MuxOutput> {
   const quality = input.quality ?? 'best', retries = input.compressionRetries ?? 3;
   if (!Number.isInteger(retries) || retries < 1 || retries > 5) throw new Error('再試行回数が正しくありません');
   const originalAac = input.hls ? await runTask({ kind: 'extract-hls', hls: input.hls }, options.signal) : input.aac;
@@ -42,6 +44,7 @@ export async function muxAacToM4a(input: MuxInput, options: { signal?: AbortSign
   let aac = originalAac, outputBitrate = sourceBitrate, compressionAttempts = 0;
   const warnings: string[] = [];
   if (target !== undefined) {
+    options.onStage?.('encode');
     for (let attempt = 0; attempt <= retries; attempt++) {
       options.signal?.throwIfAborted();
       compressionAttempts++;
@@ -56,15 +59,18 @@ export async function muxAacToM4a(input: MuxInput, options: { signal?: AbortSign
     if (aac === originalAac) warnings.push('圧縮に失敗したため、元の最高音質で保存対象にしました。');
   }
   options.signal?.throwIfAborted();
+  options.onStage?.('mux');
   let m4a: Uint8Array;
+  let coverEmbedded = Boolean(input.jpeg);
   try {
     m4a = await runTask({ kind: 'mux', input: { ...input, aac } }, options.signal);
   } catch (error) {
     if (!input.jpeg || options.signal?.aborted || error instanceof DOMException && error.name === 'AbortError') throw error;
     const { jpeg: _jpeg, ...audioOnly } = input;
     m4a = await runTask({ kind: 'mux', input: { ...audioOnly, aac } }, options.signal);
+    coverEmbedded = false;
     warnings.push('ジャケットを付けられなかったため、音声とメタデータだけを保存対象にしました。');
   }
-  return { m4a, aac, warnings, compressed: aac !== originalAac,
+  return { m4a, aac, warnings, coverEmbedded, compressed: aac !== originalAac,
     sourceBitrate, outputBitrate, compressionAttempts };
 }

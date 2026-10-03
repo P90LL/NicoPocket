@@ -25,7 +25,7 @@ test('ビルドはフォーク元のランタイム・Cookie設定・既存入�
   const built = JSON.parse(readFileSync('.build/extension/manifest.json'));
   assert.equal(built.options_page, source.options_page);
   assert.deepEqual(built.web_accessible_resources, source.web_accessible_resources);
-  assert.deepEqual(built.permissions, ['storage', 'activeTab']);
+  assert.deepEqual(built.permissions, ['storage', 'activeTab', 'downloads']);
   for (const block of source.content_scripts) for (const file of block.js) {
     assert.deepEqual(readFileSync(`nico_downloader/${file}`), readFileSync(`.build/extension/${file}`));
   }

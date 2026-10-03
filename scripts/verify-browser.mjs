@@ -96,6 +96,36 @@ async function verifyMedia(ui) {
   assert.equal(probe.format.tags.source_url, 'https://www.nicovideo.jp/watch/sm100');
   assert.ok(probe.streams.some(row=>row.codec_name==='aac'));
   assert.ok(probe.streams.some(row=>row.codec_name==='mjpeg' && row.disposition.attached_pic===1));
+  const wrapped = await ui.evaluate(`(async()=>{
+    const {processJobMedia}=await import('./assets/job-media.js');
+    const digest=[...new Uint8Array(await crypto.subtle.digest('SHA-256',cover.slice()))]
+      .map(value=>value.toString(16).padStart(2,'0')).join('');
+    const thumbnail={width:512,height:512,crop:{x:0,y:0,size:512},jpegBytes:cover.length,jpegSha256:digest};
+    const job={id:'synthetic-job',videoId:sample.videoId,title:sample.title,sourceUrl:sample.sourceUrl,
+      quality:'best',saveAac:true,saveJpeg:true,compressionRetries:3,thumbnail};
+    const image={source:new File([cover],'synthetic.jpg',{type:'image/jpeg'}),
+      jpeg:new Blob([cover],{type:'image/jpeg'}),metadata:thumbnail};
+    const stages=[];
+    const output=await processJobMedia(job,sample.aac,{get:async()=>image},
+      new AbortController().signal,stage=>stages.push(stage));
+    let badImage=false;
+    try{await processJobMedia({...job,thumbnail:{...thumbnail,jpegSha256:'0'.repeat(64)}},
+      sample.aac,{get:async()=>image},new AbortController().signal,()=>{});
+    }catch(error){badImage=error.code==='JOB_IMAGE_UNAVAILABLE'}
+    const missing=await processJobMedia({...job,thumbnail:undefined},sample.aac,{get:async()=>undefined},
+      new AbortController().signal,()=>{});
+    return {m4a:btoa(String.fromCharCode(...output.m4a)),aac:output.aac?.length,
+      jpeg:output.jpeg?.length,warning:output.warning,stages,badImage,
+      missing:{warning:missing.warning,warnings:missing.warnings,jpeg:missing.jpeg?.length}};
+  })()`);
+  assert.equal(wrapped.warning,false); assert.equal(wrapped.aac>0,true);
+  assert.equal(wrapped.jpeg>0,true); assert.deepEqual(wrapped.stages,['mux']);
+  assert.equal(wrapped.badImage,true);
+  assert.deepEqual(wrapped.missing,{warning:true,warnings:['COVER_UNAVAILABLE']});
+  writeFileSync(file,Buffer.from(wrapped.m4a,'base64'));
+  const wrappedProbe=JSON.parse(execFileSync(ffprobe,['-v','error','-show_streams','-show_format','-of','json',file],{encoding:'utf8'}));
+  assert.equal(wrappedProbe.format.tags.niconico_id,'sm100');
+  assert.ok(wrappedProbe.streams.some(row=>row.codec_name==='mjpeg'&&row.disposition.attached_pic===1));
   const packets = path => JSON.parse(execFileSync(ffprobe, ['-v','error','-select_streams','a:0',
     '-show_packets','-show_data_hash','sha256','-show_entries','packet=data_hash','-of','json',path],{encoding:'utf8'})).packets;
   // ADTS packets include transport headers. Compare with a native stream-copy M4A reference.
@@ -194,8 +224,9 @@ async function verifyMedia(ui) {
     checks:['M4A decode','AAC packet hashes unchanged','Japanese title and two custom tags','JPEG attached picture',
       'image failure falls back to audio','abort terminates Worker','invalid audio rejected',
       'under-cap audio copied','160 kbps upper bound','128 kbps upper bound',
-      'local HLS AAC extraction','missing HLS asset rejected','corrupt HLS asset rejected','encrypted HLS AAC extraction'],
-    bitrateConversion:'synthetic AAC verified',downloadRegistration:'not connected',realSiteAcquisition:'unverified'};
+      'local HLS AAC extraction','missing HLS asset rejected','corrupt HLS asset rejected','encrypted HLS AAC extraction',
+      'registered job media and JPEG output','invalid registered image rejected','missing image warning continuation'],
+    bitrateConversion:'synthetic AAC verified',downloadRegistration:'product path connected; no end-to-end media save verified',realSiteAcquisition:'unverified'};
   writeFileSync(resolve(root,'.build/media-report.json'),JSON.stringify(report,null,2)+'\n');
   console.log(JSON.stringify(report));
 }
@@ -236,6 +267,35 @@ try {
     const preserved = await ui.evaluate("chrome.runtime.sendMessage({kind:'np:snapshot'})");
     assert.equal(preserved.drafts[0].title, '編集済み / タイトル');
     assert.equal(preserved.drafts.length, 2);
+    const registered = await ui.evaluate("chrome.runtime.sendMessage({kind:'np:register-job',videoId:'sm100'})");
+    assert.equal(registered.ok, true); assert.equal(registered.added, true);
+    const duplicateJob = await ui.evaluate("chrome.runtime.sendMessage({kind:'np:register-job',videoId:'sm100'})");
+    assert.equal(duplicateJob.added, false); assert.equal(duplicateJob.jobId, registered.jobId);
+    assert.equal((await ui.evaluate(`chrome.runtime.sendMessage({kind:'np:read-job',id:'${registered.jobId}'})`)).job.status, 'waiting');
+    assert.equal((await ui.evaluate(`chrome.runtime.sendMessage({kind:'np:apply-job-event',event:{type:'start',id:'${registered.jobId}'}})`)).job.status, 'processing');
+    assert.equal((await ui.evaluate(`chrome.runtime.sendMessage({kind:'np:apply-job-event',event:{type:'progress',id:'${registered.jobId}',stage:'save',percent:80}})`)).job.percent, 80);
+    assert.equal((await ui.evaluate(`chrome.runtime.sendMessage({kind:'np:apply-job-event',event:{type:'complete',id:'${registered.jobId}'}})`)).job.status, 'complete');
+    const secondJob = await ui.evaluate("chrome.runtime.sendMessage({kind:'np:register-job',videoId:'sm200'})");
+    assert.equal(secondJob.added, true);
+    assert.equal((await ui.evaluate(`chrome.runtime.sendMessage({kind:'np:job-action',id:'${secondJob.jobId}',action:'cancel'})`)).ok, true);
+    assert.equal((await ui.evaluate(`chrome.runtime.sendMessage({kind:'np:job-action',id:'${secondJob.jobId}',action:'retry'})`)).ok, true);
+    assert.equal((await ui.evaluate(`chrome.runtime.sendMessage({kind:'np:job-action',id:'${secondJob.jobId}',action:'remove'})`)).ok, true);
+    assert.equal((await ui.evaluate("chrome.runtime.sendMessage({kind:'np:retain-save',videoId:'sm100',downloadId:999999})")).ok, false);
+    const createDownload = async filename => ui.evaluate(`(async()=>{
+      const url=URL.createObjectURL(new Blob(['synthetic save record'],{type:'application/octet-stream'}));
+      return chrome.downloads.download({url,filename:${JSON.stringify(filename)},saveAs:false});
+    })()`);
+    const firstDownloadId = await createDownload('NicoPocket/recovery-a.txt');
+    assert.equal((await ui.evaluate(`chrome.runtime.sendMessage({kind:'np:retain-save',videoId:'sm100',downloadId:${firstDownloadId}})`)).ok, true);
+    assert.deepEqual((await ui.evaluate("chrome.runtime.sendMessage({kind:'np:pending-saves'})")).pendingSaves,
+      [{ videoId: 'sm100', downloadId: firstDownloadId }]);
+    await until(() => ui.evaluate(`chrome.downloads.search({id:${firstDownloadId}}).then(rows=>rows[0]?.state==='complete')`), 'Synthetic save did not finish');
+    assert.equal((await ui.evaluate(`chrome.runtime.sendMessage({kind:'np:release-save',videoId:'sm100',downloadId:${firstDownloadId}})`)).ok, true);
+    assert.deepEqual((await ui.evaluate("chrome.runtime.sendMessage({kind:'np:pending-saves'})")).pendingSaves, []);
+    const retainedDownloadId = await createDownload('NicoPocket/recovery-b.txt');
+    assert.equal((await ui.evaluate(`chrome.runtime.sendMessage({kind:'np:retain-save',videoId:'sm200',downloadId:${retainedDownloadId}})`)).ok, true);
+    await until(() => ui.evaluate(`chrome.downloads.search({id:${retainedDownloadId}}).then(rows=>rows[0]?.state==='complete')`), 'Retained synthetic save did not finish');
+    assert.equal((await ui.evaluate("chrome.runtime.sendMessage({kind:'np:register-job',videoId:'sm200'})")).ok, false);
     const invalid = await ui.evaluate("chrome.runtime.sendMessage({kind:'np:update-settings',changes:{concurrency:9}})");
     assert.equal(invalid.ok, false);
     await ui.evaluate("document.querySelector('[data-view=settings]').click(); const field=document.querySelector('[name=defaultTheme]');field.value='dark';field.dispatchEvent(new Event('change',{bubbles:true}))");
@@ -248,8 +308,38 @@ try {
     await until(() => ui.evaluate("!document.querySelector('#thumbnail-preview').hidden"), 'JPEG preview missing');
     const preview = await ui.evaluate("(()=>{const image=document.querySelector('#thumbnail-preview');return {width:image.naturalWidth,height:image.naturalHeight,status:document.querySelector('#thumbnail-status').textContent}})()");
     assert.equal(preview.width, 512); assert.equal(preview.height, 512);
+    const imageJob = await ui.evaluate("chrome.runtime.sendMessage({kind:'np:register-job',videoId:'sm100'})");
+    assert.equal(imageJob.added, true);
+    const fixedImage = await ui.evaluate(`(async()=>{
+      const {JobImageDatabase}=await import('./assets/job-image-database.js');
+      const image=await new JobImageDatabase().get('${imageJob.jobId}');
+      const job=(await chrome.runtime.sendMessage({kind:'np:read-job',id:'${imageJob.jobId}'})).job;
+      return {bytes:image?.jpeg.size,cropX:image?.metadata.crop.x,
+        imageMetadata:image?.metadata,jobMetadata:job?.thumbnail};
+    })()`);
+    assert.ok(fixedImage.bytes>0); assert.deepEqual(fixedImage.imageMetadata,fixedImage.jobMetadata);
     await ui.evaluate("document.querySelector('#crop-box').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}))");
     await until(() => ui.evaluate("!document.querySelector('#thumbnail-preview').hidden && document.querySelector('#thumbnail-coordinates').textContent.includes('x 141')"), 'Manual crop failed');
+    assert.equal((await ui.evaluate(`(async()=>{const {JobImageDatabase}=await import('./assets/job-image-database.js');
+      return (await new JobImageDatabase().get('${imageJob.jobId}'))?.metadata.crop.x})()`)),fixedImage.cropX);
+    assert.equal(await ui.evaluate("document.querySelectorAll('#jobs .job-item').length >= 2"), true);
+    await worker.evaluate("__npVerify.addVideo('https://www.nicovideo.jp/watch/sm300','接続確認')");
+    await until(() => ui.evaluate("document.querySelectorAll('#drafts button').length===3"), 'Third candidate missing');
+    await ui.evaluate("document.querySelector('#drafts button[data-id=sm300]').click();document.querySelector('[data-view=confirm]').click();document.querySelector('#start-save').click()");
+    await until(() => ui.evaluate("chrome.runtime.sendMessage({kind:'np:jobs'}).then(row=>row.jobs.some(job=>job.videoId==='sm300' && job.status==='error'))"),
+      'Save start did not reach controlled source failure');
+    assert.equal(await ui.evaluate("document.querySelector('#view-queue').hidden===false && !!document.querySelector('#jobs .job-item[data-status=error]')"), true);
+    assert.equal(await ui.evaluate("chrome.runtime.getManifest().optional_permissions.includes('downloads.open') && Number(chrome.runtime.getManifest().minimum_chrome_version)>=123"), true);
+    await worker.evaluate("__npVerify.addVideo('https://www.nicovideo.jp/watch/sm400','開く操作の確認')");
+    const openedJob = await ui.evaluate("chrome.runtime.sendMessage({kind:'np:register-job',videoId:'sm400'})");
+    assert.equal(openedJob.ok, true);
+    const openDownloadId = await createDownload('NicoPocket/synthetic.m4a');
+    await until(() => ui.evaluate(`chrome.downloads.search({id:${openDownloadId}}).then(rows=>rows[0]?.state==='complete')`),
+      'Synthetic M4A download did not finish');
+    assert.equal((await ui.evaluate(`chrome.runtime.sendMessage({kind:'np:apply-job-event',event:{type:'start',id:'${openedJob.jobId}'}})`)).ok, true);
+    assert.equal((await ui.evaluate(`chrome.runtime.sendMessage({kind:'np:apply-job-event',event:{type:'complete',id:'${openedJob.jobId}',downloads:{m4a:${openDownloadId}}}})`)).ok, true);
+    await until(() => ui.evaluate("[...document.querySelectorAll('#jobs .job-item')].some(row=>row.textContent.includes('sm400') && [...row.querySelectorAll('button')].some(button=>button.textContent==='保存されたM4Aを開く' && !button.disabled))"),
+      'Verified M4A open action missing');
     await ui.evaluate("document.querySelector('[data-view=basic]').click()");
     await ui.call('Emulation.setDeviceMetricsOverride', { width: 980, height: 800, deviceScaleFactor: 1, mobile: false });
     const screenshot = await ui.call('Page.captureScreenshot', { format: 'png' });
@@ -262,13 +352,27 @@ try {
     await until(() => worker.evaluate("chrome.storage.session.get('np:drafts').then(row=>!row['np:drafts'])"), 'Closed window did not clear candidates');
     const reopened = await worker.evaluate('__npVerify.openWindow()'); assert.notEqual(reopened, windows[0]);
     const clean = await worker.evaluate("chrome.storage.session.get('np:drafts')"); assert.equal(clean['np:drafts'], undefined);
+    assert.equal((await worker.evaluate("chrome.storage.session.get('np:jobs')"))['np:jobs'], undefined);
+    assert.deepEqual((await worker.evaluate("chrome.storage.local.get('np:pendingSaves')"))['np:pendingSaves'],
+      [{ videoId: 'sm200', downloadId: retainedDownloadId }]);
+    const reopenedPopup = await until(async () => (await list()).find(row => row.url === `chrome-extension://${id}/pocket/window.html`), 'Reopened window missing');
+    const reopenedUi = await connect(reopenedPopup);
+    assert.equal(await reopenedUi.evaluate(`(async()=>{const {JobImageDatabase}=await import('./assets/job-image-database.js');
+      return (await new JobImageDatabase().get('${imageJob.jobId}'))===undefined})()`),true);
+    await until(() => reopenedUi.evaluate("document.querySelectorAll('#pending-saves li').length===1"), 'Recovery row missing');
+    await reopenedUi.evaluate("document.querySelector('[data-view=queue]').click();document.querySelector('#pending-saves button').click()");
+    await until(() => reopenedUi.evaluate("chrome.runtime.sendMessage({kind:'np:pending-saves'}).then(row=>row.pendingSaves.length===0)"), 'Recovery review did not clear record');
+    assert.deepEqual((await reopenedUi.evaluate("chrome.runtime.sendMessage({kind:'np:pending-saves'})")).pendingSaves, []);
     assert.equal((await worker.evaluate("chrome.storage.local.get('np:settings')"))['np:settings'].defaultTheme, 'dark');
     assert.equal(worker.exceptions.length, 0); assert.equal(ui.exceptions.length, 0); assert.equal(page.exceptions.length, 0);
     const report = { passed: true, scope: 'isolated Chrome for Testing; synthetic input only',
-      checks: ['single window', 'shared candidates', 'duplicate preserves edits', 'invalid settings rejected',
+      checks: ['single window', 'shared candidates', 'duplicate preserves edits', 'shared job state and cleanup',
+        'registered JPEG fixed across edits and released on close', 'UI save start reaches controlled source failure',
+        'verified M4A open action with optional permission', 'invalid settings rejected',
         'settings autosave', 'reload restoration', 'temporary theme', 'JPEG preview', 'keyboard crop',
-        'non-watch page exclusion', 'window-close cleanup', 'persistent settings'],
-      exceptions: 0, realSiteAcquisition: 'unverified', upstreamSave: 'unverified', m4aSave: 'not connected' };
+        'non-watch page exclusion', 'window-close cleanup', 'persistent settings',
+        'Chrome-owned save ID retention and recovery review'],
+      exceptions: 0, realSiteAcquisition: 'unverified', upstreamSave: 'unverified', m4aSave: 'product path connected; no end-to-end media save verified' };
     writeFileSync(resolve(root, '.build/browser-report.json'), JSON.stringify(report, null, 2) + '\n');
     console.log(JSON.stringify(report));
   }

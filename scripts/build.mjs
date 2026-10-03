@@ -2,15 +2,17 @@ import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } fr
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
+import { build as bundle } from 'esbuild';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const build = resolve(root, '.build');
 rmSync(build, { recursive: true, force: true });
 mkdirSync(build, { recursive: true });
 const compiler = resolve(root, 'node_modules/typescript/bin/tsc');
-for (const config of ['tsconfig.json', 'tsconfig.content.json']) {
-  execFileSync(process.execPath, [compiler, '-p', config], { cwd: root, stdio: 'inherit' });
-}
+execFileSync(process.execPath, [compiler, '-p', 'tsconfig.json'], { cwd: root, stdio: 'inherit' });
+await bundle({ entryPoints: [resolve(root, 'src/pocket/content.ts')],
+  outfile: resolve(build, 'pocket/assets/content.js'), bundle: true,
+  platform: 'browser', format: 'iife', target: 'chrome116', sourcemap: false });
 const extension = resolve(build, 'extension');
 cpSync(resolve(root, 'nico_downloader'), extension, { recursive: true, dereference: true,
   filter: path => !path.endsWith('.DS_Store') });
@@ -30,9 +32,10 @@ manifest.name = 'NicoPocket';
 manifest.description = 'にこぽけ：nico downloaderをベースに音声保存とジャケット編集を開発しています。';
 manifest.action = { default_title: 'NicoPocketを開く' };
 manifest.background = { service_worker: 'pocket/assets/background.js', type: 'module' };
-manifest.minimum_chrome_version = '116';
+manifest.minimum_chrome_version = '123';
 manifest.content_security_policy = { extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'" };
-manifest.permissions = [...new Set([...manifest.permissions, 'activeTab'])];
+manifest.permissions = [...new Set([...manifest.permissions, 'activeTab', 'downloads'])];
+manifest.optional_permissions = [...new Set([...(manifest.optional_permissions ?? []), 'downloads.open'])];
 const watch = manifest.content_scripts.find(row => row.matches.includes('https://www.nicovideo.jp/*'));
 watch.js.push('pocket/assets/content.js');
 watch.css = [...(watch.css ?? []), 'pocket/content.css'];

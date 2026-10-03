@@ -26,3 +26,12 @@ test("同じジョブの全成果物に同じ連番を付ける", () => {
   assert.deepEqual(outputNames("", "sm1", 0, false, false), { m4a: "sm1.m4a" });
   assert.throws(() => outputNames("A", "sm1", -1, false, false));
 });
+
+test("連番を含む保存名を200バイト以内に収め、書記素を途中で切らない", () => {
+  const names = outputNames("👩‍💻".repeat(30), "sm1", 12, true, true);
+  const stem = names.m4a.slice(0, -4);
+  assert(stem.endsWith("(12)"));
+  assert(new TextEncoder().encode(stem).length <= 200);
+  assert.equal(names.aac, `${stem}.aac`);
+  assert.equal(names.jpeg, `${stem}.jpg`);
+});

@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
+import { randomBytes } from 'node:crypto';
 import { spawn, execFileSync } from 'node:child_process';
 import { once } from 'node:events';
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -81,8 +82,10 @@ async function verifyMedia(ui) {
   await ui.evaluate(`(async()=>{${prepare} return true})()`);
   const convert = async expression => {
     const result = await ui.evaluate(`(async()=>{const output=await ${expression};
-      return {bytes:btoa(String.fromCharCode(...output.m4a)),warnings:output.warnings}})()`);
-    return { bytes: Buffer.from(result.bytes, 'base64'), warnings: result.warnings };
+      return {bytes:btoa(String.fromCharCode(...output.m4a)),warnings:output.warnings,
+        compressed:output.compressed,sourceBitrate:output.sourceBitrate,
+        outputBitrate:output.outputBitrate,compressionAttempts:output.compressionAttempts}})()`);
+    return { ...result, bytes: Buffer.from(result.bytes, 'base64') };
   };
   const covered = await convert('mux({...sample,jpeg:cover})');
   assert.deepEqual(covered.warnings, []);
@@ -108,10 +111,91 @@ async function verifyMedia(ui) {
   assert.ok(fallbackProbe.streams.every(row=>row.codec_type==='audio'));
   assert.equal(await ui.evaluate("(async()=>{const controller=new AbortController();const promise=mux(sample,{signal:controller.signal});controller.abort();try{await promise;return false}catch(error){return error.name==='AbortError'}})()"), true);
   assert.equal(await ui.evaluate("(async()=>{try{await mux({...sample,aac:new Uint8Array([1,2,3])});return false}catch{return true}})()"), true);
-  const report = {passed:true,scope:'bundled upstream Wasm; synthetic AAC/JPEG only',
+  const high = resolve(scratch, 'high.aac'), low = resolve(scratch, 'low.aac');
+  execFileSync(ffmpeg, ['-v','error','-f','lavfi','-i',
+    'anoisesrc=duration=3:color=white:sample_rate=48000', '-c:a','aac','-b:a','192k','-f','adts',high]);
+  execFileSync(ffmpeg, ['-v','error','-f','lavfi','-i',
+    'sine=frequency=440:sample_rate=48000:duration=3', '-c:a','aac','-b:a','64k','-f','adts',low]);
+  for (const [key, path] of [['high',high],['low',low]]) {
+    const encoded = readFileSync(path).toString('base64');
+    await ui.evaluate(`globalThis.${key}=Uint8Array.from(atob('${encoded}'),char=>char.charCodeAt(0));true`);
+  }
+  const untouched = await convert("mux({...sample,aac:low,quality:'limit128'})");
+  assert.equal(untouched.compressed, false); assert.equal(untouched.compressionAttempts, 0);
+  writeFileSync(file, untouched.bytes);
+  const lowReference = resolve(scratch, 'low-reference.m4a');
+  execFileSync(ffmpeg, ['-v','error','-i',low,'-c:a','copy',lowReference]);
+  assert.equal(JSON.stringify(packets(file)) === JSON.stringify(packets(lowReference)), true, 'Below-cap AAC changed');
+  for (const [quality, cap] of [['limit160',160000],['limit128',128000]]) {
+    const limited = await convert(`mux({...sample,aac:high,quality:'${quality}',compressionRetries:3})`);
+    assert.ok(limited.sourceBitrate > cap, 'Fixture is not above cap');
+    assert.equal(limited.compressed, true, `${quality}: compression did not succeed`);
+    assert.ok(limited.outputBitrate <= cap, `${quality}: output exceeds cap`);
+    assert.equal(limited.compressionAttempts, 1);
+    assert.deepEqual(limited.warnings, []);
+    writeFileSync(file, limited.bytes);
+    execFileSync(ffmpeg, ['-v','error','-i',file,'-map','0:a:0','-f','null','-']);
+  }
+  const hlsDir = resolve(scratch, 'hls'); mkdirSync(hlsDir);
+  const playlistPath = resolve(hlsDir, 'source.m3u8');
+  execFileSync(ffmpeg, ['-v','error','-f','lavfi','-i',
+    'anoisesrc=duration=3:color=white:sample_rate=48000',
+    '-c:a','aac','-b:a','192k','-f','hls','-hls_segment_type','fmp4',
+    '-hls_time','1','-hls_list_size','0','-hls_segment_filename',
+    resolve(hlsDir,'chunk-%03d.m4s'),playlistPath]);
+  async function installHlsInput(key, directory, path) {
+    let localPlaylist = readFileSync(path,'utf8');
+    const names = [...new Set([...localPlaylist.matchAll(/URI="([^"]+)"|^([^#\r\n][^\r\n]*)$/gm)]
+      .map(match=>match[1]||match[2]).filter(Boolean))];
+    const files = names.map((name,index)=>{
+      assert.match(name,/^[a-zA-Z0-9._-]+$/);
+      const bytes=readFileSync(resolve(directory,name));
+      const asset=`asset-${index}.bin`;
+      localPlaylist=localPlaylist.replaceAll(name,asset);
+      return {name:asset,bytes:bytes.toString('base64')};
+    });
+    await ui.evaluate(`globalThis[${JSON.stringify(key)}]={playlist:${JSON.stringify(localPlaylist)},
+      files:${JSON.stringify(files)}.map(file=>({name:file.name,
+      bytes:Uint8Array.from(atob(file.bytes),char=>char.charCodeAt(0))}))};true`);
+  }
+  await installHlsInput('hlsInput',hlsDir,playlistPath);
+  const fromHls = await convert('mux({...sample,aac:new Uint8Array(),hls:hlsInput})');
+  assert.equal(fromHls.compressed,false);
+  writeFileSync(file,fromHls.bytes);
+  execFileSync(ffmpeg,['-v','error','-i',file,'-map','0:a:0','-f','null','-']);
+  const hlsReference=resolve(scratch,'hls-reference.m4a');
+  execFileSync(ffmpeg,['-v','error','-i',playlistPath,'-map','0:a:0','-c:a','copy',hlsReference]);
+  assert.deepEqual(packets(file).map(row=>row.data_hash),
+    packets(hlsReference).map(row=>row.data_hash), 'HLS AAC payload changed');
+  assert.equal(await ui.evaluate(`(async()=>{try{await mux({...sample,aac:new Uint8Array(),
+    hls:{...hlsInput,files:hlsInput.files.slice(1)}});return false}catch{return true}})()`),true);
+  assert.equal(await ui.evaluate(`(async()=>{try{const files=hlsInput.files.map((file,index)=>
+    index===hlsInput.files.length-1?{name:file.name,bytes:new Uint8Array([1,2,3])}:file);
+    await mux({...sample,aac:new Uint8Array(),hls:{...hlsInput,files}});return false}catch{return true}})()`),true);
+  const encryptedDir=resolve(scratch,'encrypted');mkdirSync(encryptedDir);
+  const keyPath=resolve(encryptedDir,'key.bin');
+  writeFileSync(keyPath,randomBytes(16));
+  const keyInfo=resolve(encryptedDir,'key.info');
+  writeFileSync(keyInfo,`key.bin\n${keyPath}\n`);
+  const encryptedPlaylist=resolve(encryptedDir,'source.m3u8');
+  execFileSync(ffmpeg,['-v','error','-f','lavfi','-i',
+    'sine=frequency=440:sample_rate=48000:duration=3','-c:a','aac','-b:a','160k',
+    '-f','hls','-hls_time','1','-hls_list_size','0','-hls_key_info_file',keyInfo,
+    '-hls_segment_filename',resolve(encryptedDir,'chunk-%03d.ts'),encryptedPlaylist]);
+  await installHlsInput('encryptedHls',encryptedDir,encryptedPlaylist);
+  const decrypted=await convert('mux({...sample,aac:new Uint8Array(),hls:encryptedHls})');
+  writeFileSync(file,decrypted.bytes);
+  execFileSync(ffmpeg,['-v','error','-i',file,'-map','0:a:0','-f','null','-']);
+  const encryptedReference=resolve(scratch,'encrypted-reference.m4a');
+  execFileSync(ffmpeg,['-v','error','-allowed_extensions','ALL','-i',encryptedPlaylist,'-map','0:a:0','-c:a','copy',encryptedReference]);
+  assert.deepEqual(packets(file).map(row=>row.data_hash),
+    packets(encryptedReference).map(row=>row.data_hash),'Encrypted HLS AAC payload changed');
+  const report = {passed:true,scope:'bundled upstream Wasm; synthetic AAC/JPEG/HLS only',
     checks:['M4A decode','AAC packet hashes unchanged','Japanese title and two custom tags','JPEG attached picture',
-      'image failure falls back to audio','abort terminates Worker','invalid audio rejected'],
-    bitrateConversion:'not implemented',downloadRegistration:'not connected',realSiteAcquisition:'unverified'};
+      'image failure falls back to audio','abort terminates Worker','invalid audio rejected',
+      'under-cap audio copied','160 kbps upper bound','128 kbps upper bound',
+      'local HLS AAC extraction','missing HLS asset rejected','corrupt HLS asset rejected','encrypted HLS AAC extraction'],
+    bitrateConversion:'synthetic AAC verified',downloadRegistration:'not connected',realSiteAcquisition:'unverified'};
   writeFileSync(resolve(root,'.build/media-report.json'),JSON.stringify(report,null,2)+'\n');
   console.log(JSON.stringify(report));
 }

@@ -141,6 +141,52 @@ function renderPendingSaves(records: PendingSave[]) {
     list.append(item);
   }
 }
+function createOpenAction(job: Job, onPermissionPrompt: () => void = () => {}): HTMLElement {
+  const downloadId = job.downloads!.m4a;
+  const wrap = document.createElement('span'); wrap.className = 'open-action';
+  const open = document.createElement('button'); open.type = 'button';
+  open.textContent = '保存されたM4Aを開く'; open.disabled = true;
+  const openStatus = document.createElement('span'); openStatus.setAttribute('role', 'status');
+  let verified = false, granted = false;
+  void Promise.all([inspectOwnSave(downloadId, true), chrome.permissions.contains({ permissions: ['downloads.open'] })])
+    .then(([file, permission]) => {
+      if (file.state !== 'complete' || !/\.m4a$/iu.test(file.filename)
+        || !currentJobs.some(row => row.id === job.id && row.downloads?.m4a === downloadId
+          && (row.status === 'complete' || row.status === 'warning'))) throw new Error();
+      verified = true; granted = permission; open.disabled = false;
+    }).catch(() => { openStatus.textContent = '保存ファイルを確認できませんでした。Chromeのダウンロード一覧をご確認ください。'; });
+  open.addEventListener('click', () => {
+    if (!verified || !currentJobs.some(row => row.id === job.id && row.downloads?.m4a === downloadId)) return;
+    if (!granted) {
+      onPermissionPrompt();
+      open.disabled = true;
+      void chrome.permissions.request({ permissions: ['downloads.open'] }).then(allowed => {
+        if (allowed) { granted = true; openStatus.textContent = '許可しました。もう一度押すとファイルを開きます。'; }
+        else openStatus.textContent = '許可されませんでした。保存結果は実行一覧に残っています。';
+      }).catch(() => { openStatus.textContent = '許可を確認できませんでした。再試行してください。'; })
+        .finally(() => { open.disabled = false; });
+      return;
+    }
+    void chrome.downloads.open(downloadId).then(() => { openStatus.textContent = 'ファイルを開きました。'; })
+      .catch(() => { openStatus.textContent = 'ファイルを開けませんでした。Chromeのダウンロード一覧をご確認ください。'; });
+  });
+  wrap.append(open, openStatus);
+  return wrap;
+}
+function createErrorDetails(job: Job): HTMLDetailsElement {
+  const details = document.createElement('details'); details.className = 'job-error-details';
+  const label = document.createElement('summary'); label.textContent = '詳細ログ';
+  const log = formatJobErrorLog(job.errorDetail!);
+  const content = document.createElement('pre'); content.textContent = log;
+  const copy = document.createElement('button'); copy.type = 'button'; copy.textContent = 'ログをコピー';
+  const result = document.createElement('span'); result.setAttribute('role', 'status');
+  copy.addEventListener('click', () => {
+    void navigator.clipboard.writeText(log).then(() => { result.textContent = 'コピーしました。'; },
+      () => { result.textContent = 'コピーできませんでした。'; });
+  });
+  details.append(label, content, copy, result);
+  return details;
+}
 function renderJobs(jobs: Job[]) {
   currentJobs = jobs;
   const list = query('#jobs');
@@ -190,50 +236,80 @@ function renderJobs(jobs: Job[]) {
       item.append(summary);
     }
     if (job.status === 'error' && job.errorDetail) {
-      const details = document.createElement('details'); details.className = 'job-error-details';
-      const label = document.createElement('summary'); label.textContent = '詳細ログ';
-      const log = formatJobErrorLog(job.errorDetail);
-      const content = document.createElement('pre'); content.textContent = log;
-      const copy = document.createElement('button'); copy.type = 'button'; copy.textContent = 'ログをコピー';
-      const result = document.createElement('span'); result.setAttribute('role', 'status');
-      copy.addEventListener('click', () => {
-        void navigator.clipboard.writeText(log).then(() => { result.textContent = 'コピーしました。'; },
-          () => { result.textContent = 'コピーできませんでした。'; });
-      });
-      details.append(label, content, copy, result); item.append(details);
+      item.append(createErrorDetails(job));
     }
     if ((job.status === 'complete' || job.status === 'warning') && job.downloads?.m4a !== undefined) {
-      const downloadId = job.downloads.m4a;
-      const open = document.createElement('button'); open.type = 'button';
-      open.textContent = '保存されたM4Aを開く'; open.disabled = true;
-      const openStatus = document.createElement('span'); openStatus.setAttribute('role', 'status');
-      let verified = false, granted = false;
-      void Promise.all([inspectOwnSave(downloadId, true), chrome.permissions.contains({ permissions: ['downloads.open'] })])
-        .then(([file, permission]) => {
-          if (file.state !== 'complete' || !/\.m4a$/iu.test(file.filename)
-            || !currentJobs.some(row => row.id === job.id && row.downloads?.m4a === downloadId
-              && (row.status === 'complete' || row.status === 'warning'))) throw new Error();
-          verified = true; granted = permission; open.disabled = false;
-        }).catch(() => { openStatus.textContent = '保存ファイルを確認できませんでした。Chromeのダウンロード一覧をご確認ください。'; });
-      open.addEventListener('click', () => {
-        if (!verified || !currentJobs.some(row => row.id === job.id && row.downloads?.m4a === downloadId)) return;
-        if (!granted) {
-          open.disabled = true;
-          void chrome.permissions.request({ permissions: ['downloads.open'] }).then(allowed => {
-            if (allowed) { granted = true; openStatus.textContent = '許可しました。もう一度押すとファイルを開きます。'; }
-            else openStatus.textContent = '許可されませんでした。保存結果は実行一覧に残っています。';
-          }).catch(() => { openStatus.textContent = '許可を確認できませんでした。再試行してください。'; })
-            .finally(() => { open.disabled = false; });
-          return;
-        }
-        void chrome.downloads.open(downloadId).then(() => { openStatus.textContent = 'ファイルを開きました。'; })
-          .catch(() => { openStatus.textContent = 'ファイルを開けませんでした。Chromeのダウンロード一覧をご確認ください。'; });
-      });
-      actions.append(open, openStatus);
+      actions.append(createOpenAction(job));
     }
     item.append(actions); list.append(item);
   }
 }
+const notifications = new Map<string, { node: HTMLElement; timer?: ReturnType<typeof setInterval> }>();
+let previousJobStates = new Map<string, string>();
+let notificationsReady = false;
+function dismissNotification(id: string, immediate = false): void {
+  const entry = notifications.get(id);
+  if (!entry) return;
+  if (entry.timer) clearInterval(entry.timer);
+  notifications.delete(id);
+  if (immediate) entry.node.remove();
+  else {
+    entry.node.classList.add('is-leaving');
+    setTimeout(() => entry.node.remove(), 350);
+  }
+}
+function announceJob(job: Job, warningSeconds: 5 | 10): void {
+  dismissNotification(job.id, true);
+  const notice = document.createElement('section'); notice.className = 'job-notification';
+  notice.dataset.status = job.status; notice.dataset.jobId = job.id;
+  const heading = document.createElement('strong'); heading.textContent = jobStatusLabel[job.status];
+  const body = document.createElement('p');
+  body.textContent = `${job.title || job.videoId} (${job.videoId})：${job.summary ?? (job.status === 'complete' ? '保存が完了しました。' : '処理が終了しました。')}`;
+  const close = document.createElement('button'); close.type = 'button'; close.className = 'notification-close';
+  close.textContent = '×'; close.setAttribute('aria-label', '通知を閉じる');
+  close.addEventListener('click', () => dismissNotification(job.id));
+  notice.append(heading, body, close);
+  const entry: { node: HTMLElement; timer?: ReturnType<typeof setInterval> } = { node: notice };
+  notifications.set(job.id, entry);
+  if ((job.status === 'complete' || job.status === 'warning') && job.downloads?.m4a !== undefined) {
+    const keep = () => {
+      if (entry.timer) { clearInterval(entry.timer); entry.timer = undefined; }
+      const countdown = notice.querySelector('.notification-countdown');
+      if (countdown) countdown.textContent = '操作を続けるまで通知を保持します。';
+    };
+    const action = createOpenAction(job, keep); action.classList.add('notification-open'); notice.append(action);
+  }
+  if (job.status === 'error' && job.errorDetail) notice.append(createErrorDetails(job));
+  if (job.status === 'complete' || job.status === 'warning') {
+    let remaining = job.status === 'warning' ? warningSeconds : 5;
+    const countdown = document.createElement('span'); countdown.className = 'notification-countdown';
+    countdown.textContent = `${remaining}秒後に閉じます。`;
+    notice.append(countdown);
+    entry.timer = setInterval(() => {
+      remaining--;
+      if (remaining <= 0) dismissNotification(job.id);
+      else countdown.textContent = `${remaining}秒後に閉じます。`;
+    }, 1000);
+  }
+  query('#notification-stack').append(notice);
+  while (notifications.size > 5) dismissNotification(notifications.keys().next().value!, true);
+}
+function updateNotifications(jobs: Job[], warningSeconds: 5 | 10): void {
+  if (notificationsReady) {
+    for (const job of jobs) {
+      const state = `${job.status}:${job.attempts}`;
+      if (previousJobStates.get(job.id) !== state
+        && (job.status === 'complete' || job.status === 'warning' || job.status === 'error')) {
+        announceJob(job, warningSeconds);
+      }
+    }
+  }
+  previousJobStates = new Map(jobs.map(job => [job.id, `${job.status}:${job.attempts}`]));
+  notificationsReady = true;
+}
+window.addEventListener('pagehide', () => {
+  for (const id of notifications.keys()) dismissNotification(id, true);
+});
 async function refresh() {
   const turn = ++revision;
   const [snapshot, pending] = await Promise.all([
@@ -246,6 +322,7 @@ async function refresh() {
   currentPendingSaves = pending.pendingSaves;
   renderJobs(snapshot.jobs);
   renderPendingSaves(pending.pendingSaves);
+  updateNotifications(snapshot.jobs, snapshot.settings.warningSeconds);
   current = snapshot.drafts; preferences = snapshot.settings;
   const list = query('#drafts'); list.replaceChildren();
   for (const draft of current) {

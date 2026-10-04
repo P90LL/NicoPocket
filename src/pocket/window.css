@@ -131,7 +131,10 @@ dd { margin: 0; overflow-wrap: anywhere; font-weight: 650; }
 .job-notification[data-status="error"] strong { color: var(--error); }
 .job-notification p { margin: 4px 0 0; overflow-wrap: anywhere; }
 .notification-countdown { display: block; margin-top: 6px; color: var(--muted); font-size: .8rem; }
+.open-action { display: grid; gap: 4px; }
+.open-action [role="status"] { color: var(--muted); font-size: .82rem; }
 .notification-open { margin-top: 10px; }
+.notification-open button { min-height: 36px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-soft); color: var(--text); }
 .notification-close { position: absolute; top: 8px; right: 8px; width: 28px; height: 28px; border: 0; border-radius: 6px; background: transparent; color: var(--text); font-size: 1.25rem; }
 .notification-close:hover { background: var(--surface-soft); }
 .job-notification.is-leaving { animation: notification-out .35s ease forwards; }

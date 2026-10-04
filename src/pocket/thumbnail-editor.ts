@@ -130,7 +130,7 @@ export class ThumbnailEditor {
     if (image.previewUrl) {
       this.preview.src = image.previewUrl;
       this.preview.hidden = false;
-      this.status.textContent = `${image.analysis ? `${image.analysis} ` : ""}JPEGプレビューを生成しました。保存処理には未接続です。`;
+      this.status.textContent = `${image.analysis ? `${image.analysis} ` : ""}JPEGプレビューを生成しました。保存開始時にこの範囲を使用します。`;
     } else {
       this.preview.removeAttribute("src");
       this.preview.hidden = true;

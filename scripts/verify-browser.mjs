@@ -275,6 +275,8 @@ try {
     assert.equal((await ui.evaluate(`chrome.runtime.sendMessage({kind:'np:apply-job-event',event:{type:'start',id:'${registered.jobId}'}})`)).job.status, 'processing');
     assert.equal((await ui.evaluate(`chrome.runtime.sendMessage({kind:'np:apply-job-event',event:{type:'progress',id:'${registered.jobId}',stage:'save',percent:80}})`)).job.percent, 80);
     assert.equal((await ui.evaluate(`chrome.runtime.sendMessage({kind:'np:apply-job-event',event:{type:'complete',id:'${registered.jobId}'}})`)).job.status, 'complete');
+    await until(() => ui.evaluate("!!document.querySelector('#notification-stack .job-notification[data-status=complete]')"),
+      'Success notification missing');
     const secondJob = await ui.evaluate("chrome.runtime.sendMessage({kind:'np:register-job',videoId:'sm200'})");
     assert.equal(secondJob.added, true);
     assert.equal((await ui.evaluate(`chrome.runtime.sendMessage({kind:'np:job-action',id:'${secondJob.jobId}',action:'cancel'})`)).ok, true);
@@ -329,7 +331,10 @@ try {
     await until(() => ui.evaluate("chrome.runtime.sendMessage({kind:'np:jobs'}).then(row=>row.jobs.some(job=>job.videoId==='sm300' && job.status==='error'))"),
       'Save start did not reach controlled source failure');
     assert.equal(await ui.evaluate("document.querySelector('#view-queue').hidden===false && !!document.querySelector('#jobs .job-item[data-status=error]')"), true);
+    await until(() => ui.evaluate("!!document.querySelector('#notification-stack .job-notification[data-status=error] .job-error-details button')"),
+      'Error notification detail missing');
     assert.equal(await ui.evaluate("chrome.runtime.getManifest().optional_permissions.includes('downloads.open') && Number(chrome.runtime.getManifest().minimum_chrome_version)>=123"), true);
+    assert.equal((await ui.evaluate("chrome.runtime.sendMessage({kind:'np:update-settings',changes:{warningSeconds:10}})")).ok, true);
     await worker.evaluate("__npVerify.addVideo('https://www.nicovideo.jp/watch/sm400','開く操作の確認')");
     const openedJob = await ui.evaluate("chrome.runtime.sendMessage({kind:'np:register-job',videoId:'sm400'})");
     assert.equal(openedJob.ok, true);
@@ -337,9 +342,14 @@ try {
     await until(() => ui.evaluate(`chrome.downloads.search({id:${openDownloadId}}).then(rows=>rows[0]?.state==='complete')`),
       'Synthetic M4A download did not finish');
     assert.equal((await ui.evaluate(`chrome.runtime.sendMessage({kind:'np:apply-job-event',event:{type:'start',id:'${openedJob.jobId}'}})`)).ok, true);
-    assert.equal((await ui.evaluate(`chrome.runtime.sendMessage({kind:'np:apply-job-event',event:{type:'complete',id:'${openedJob.jobId}',downloads:{m4a:${openDownloadId}}}})`)).ok, true);
+    assert.equal((await ui.evaluate(`chrome.runtime.sendMessage({kind:'np:apply-job-event',event:{type:'complete',id:'${openedJob.jobId}',warning:true,downloads:{m4a:${openDownloadId}}}})`)).ok, true);
     await until(() => ui.evaluate("[...document.querySelectorAll('#jobs .job-item')].some(row=>row.textContent.includes('sm400') && [...row.querySelectorAll('button')].some(button=>button.textContent==='保存されたM4Aを開く' && !button.disabled))"),
       'Verified M4A open action missing');
+    await until(() => ui.evaluate("[...document.querySelectorAll('#notification-stack .job-notification[data-status=warning]')].some(row=>row.textContent.includes('sm400') && /^(10|9)秒後/.test(row.querySelector('.notification-countdown')?.textContent ?? ''))"),
+      'Warning notification duration missing');
+    await delay(10500);
+    assert.equal(await ui.evaluate("!!document.querySelector('#notification-stack .job-notification[data-status=warning]')"), false);
+    assert.equal(await ui.evaluate("!!document.querySelector('#notification-stack .job-notification[data-status=error]')"), true);
     await ui.evaluate("document.querySelector('[data-view=basic]').click()");
     await ui.call('Emulation.setDeviceMetricsOverride', { width: 980, height: 800, deviceScaleFactor: 1, mobile: false });
     const screenshot = await ui.call('Page.captureScreenshot', { format: 'png' });
@@ -368,7 +378,7 @@ try {
     const report = { passed: true, scope: 'isolated Chrome for Testing; synthetic input only',
       checks: ['single window', 'shared candidates', 'duplicate preserves edits', 'shared job state and cleanup',
         'registered JPEG fixed across edits and released on close', 'UI save start reaches controlled source failure',
-        'verified M4A open action with optional permission', 'invalid settings rejected',
+        'verified M4A open action with optional permission', 'success, warning and error notifications', 'invalid settings rejected',
         'settings autosave', 'reload restoration', 'temporary theme', 'JPEG preview', 'keyboard crop',
         'non-watch page exclusion', 'window-close cleanup', 'persistent settings',
         'Chrome-owned save ID retention and recovery review'],

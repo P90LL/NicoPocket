@@ -5,14 +5,19 @@ const qualityInput = document.getElementById('audio-quality');
 const image = document.getElementById('artwork-image');
 const emptyImage = document.getElementById('artwork-empty');
 const imageState = document.getElementById('artwork-state');
+const downloadButton = document.getElementById('download');
+let requestingAAC = false;
+let aacState = null;
 let sourceKey = '';
 let refreshSequence = 0;
 
 function render(context) {
     if (!context) {
+        downloadButton.disabled = true;
         document.getElementById('video-status').textContent = '動画ページのボタンから開いてください。';
         return;
     }
+    syncAACButton();
     const nextKey = context.sourceTabId + ':' + context.videoId;
     NicoPocketEditor.context = context;
     if (sourceKey !== nextKey) {
@@ -57,13 +62,46 @@ document.getElementById('close-editor').addEventListener('click', () => window.c
 async function refresh() {
     const sequence = ++refreshSequence;
     try {
-        const stored = await chrome.storage.session.get('np:videoContext');
-        if (sequence === refreshSequence) render(stored['np:videoContext']);
+        const stored = await chrome.storage.session.get(['np:videoContext', 'np:aacJob']);
+        if (sequence === refreshSequence) {
+            aacState = stored['np:aacJob'] || null;
+            render(stored['np:videoContext']);
+            syncAACButton();
+        }
     } catch {
         document.getElementById('video-status').textContent = '動画情報を読み込めませんでした。動画ページから再度開いてください。';
     }
 }
 chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === 'session' && changes['np:videoContext']) void refresh();
+    if (area === 'session' && (changes['np:videoContext'] || changes['np:aacJob'])) void refresh();
 });
 void refresh();
+
+function syncAACButton() {
+    const running = aacState && !['complete', 'error'].includes(aacState.phase);
+    downloadButton.disabled = requestingAAC || Boolean(running) || !NicoPocketEditor.context;
+    titleInput.disabled = Boolean(running);
+    qualityInput.disabled = Boolean(running);
+    const labels = { starting: 'AAC取得を開始しています…', acquiring: '既存処理でAACを取得・生成しています…', saving: 'AACを保存しています…', complete: 'AACの保存が完了しました。' };
+    document.getElementById('save-status').textContent = aacState?.phase === 'error'
+        ? aacState.error || '処理に失敗しました。再度実行できます。'
+        : labels[aacState?.phase] || 'AACとして保存します。音質選択・Artwork処理は未接続です。';
+}
+downloadButton.addEventListener('click', async () => {
+    if (downloadButton.disabled || requestingAAC || !NicoPocketEditor.context) return;
+    const context = NicoPocketEditor.context;
+    requestingAAC = true;
+    syncAACButton();
+    try {
+        const title = NicoPocketTitle.normalize(NicoPocketEditor.title, context.videoId);
+        const reply = await chrome.runtime.sendMessage({ kind: 'np:aac-start',
+            sourceTabId: context.sourceTabId, sourceUrl: context.sourceUrl, videoId: context.videoId, title });
+        if (!reply?.ok) throw new Error(reply?.error || 'AAC取得を開始できませんでした。');
+        await refresh();
+    } catch (error) {
+        aacState = { phase: 'error', error: error.message || '取得開始に失敗しました。' };
+    } finally {
+        requestingAAC = false;
+        syncAACButton();
+    }
+});

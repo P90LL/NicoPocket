@@ -1,6 +1,6 @@
 //ダウンロード関数
 
-async function VideoDown() {
+async function VideoDown(request) {
     // 必要なクラスの初期化
     const NicoDownloader = new NicoDownloaderClass(); //NicoDownloaderクラスの初期化
     const Nicovideo = new NicovideoClass(); //NicovideoClassクラスの初期化
@@ -18,6 +18,7 @@ async function VideoDown() {
     Nicovideo.video_sm = Nicovideo.VideoSmGet(NicoDownloader.MatchingSMIDArray);
 
     await Nicovideo.SetAllFromVideoSm(Nicovideo.video_sm);
+    if (request && !request.isCurrent()) return false;
 
     await new Promise(async (resolve, reject) => {
         // sm番号かタイトルが取得できなかったら終了
@@ -26,6 +27,7 @@ async function VideoDown() {
 
         // デフォルト動画ファイル名の定義
         let downFile_setting = await downFile_get();
+        if (request && !request.isCurrent()) { reject(new Error('取得元動画が切り替わりました。')); return; }
         DebugPrint("downFile_setting:" + downFile_setting); // 取得した値を表示
 
         let video_name = NicoDownloader.VideoDownloadNameMake(
@@ -81,6 +83,7 @@ async function VideoDown() {
             resolve();
         })
             .then(() => {
+                if (request && !request.isCurrent()) return false;
                 ////////////////////////////////////////////////////////////////
                 // ここから実行部分
                 ////////////////////////////////////////////////////////////////

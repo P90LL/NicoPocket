@@ -22,6 +22,7 @@ const NicoPocketUI = (() => {
         button.textContent = 'NicoPocketで保存';
     }
     function placeButton() {
+        if (globalThis.NicoPocketAAC?.busy) return;
         if (!watchPage()) {
             document.querySelector('[data-nicopocket-created-slot]')?.remove();
             return;

@@ -9,7 +9,8 @@
         "128": "icon_128.png"
     },
     "permissions": [
-        "storage"
+        "storage",
+        "downloads"
     ],
     "web_accessible_resources": [
         {
@@ -44,7 +45,8 @@
                 "dist/utils.js",
                 "func/nicojson.js",
                 "func/ndl.js",
-                "pocket/video-info.js"
+                "pocket/video-info.js",
+                "pocket/aac-bridge.js"
             ]
         },
         {

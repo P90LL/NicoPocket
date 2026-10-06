@@ -57,3 +57,97 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
     opening.then(() => reply({ ok: true }), () => reply({ ok: false }));
     return true;
 });
+
+// Single AAC job; existing content-side code performs media acquisition and saving.
+let startingAAC = false;
+const terminalAAC = state => !state || ['complete', 'error'].includes(state.phase);
+let aacUpdates = Promise.resolve();
+function updateAAC(id, changes) {
+    const task = aacUpdates.catch(() => {}).then(() => applyAACUpdate(id, changes));
+    aacUpdates = task;
+    return task;
+}
+async function applyAACUpdate(id, changes) {
+    const stored = await chrome.storage.session.get('np:aacJob');
+    const state = stored['np:aacJob'];
+    if (!state || state.id !== id || terminalAAC(state)) return;
+    const next = { ...state, ...changes };
+    // Session storage is not exposed to content scripts. Release their lock explicitly.
+    if (terminalAAC(next) || changes.downloadId != null) {
+        try { await chrome.tabs.sendMessage(state.sourceTabId, { kind: 'np:aac-status',
+            jobId: state.id, phase: next.phase, error: next.error, downloadId: next.downloadId }, { frameId: 0 }); } catch { /* Closed source tab. */ }
+    }
+    await chrome.storage.session.set({ 'np:aacJob': next });
+}
+chrome.runtime.onMessage.addListener((message, sender, respond) => {
+    if (sender.id !== chrome.runtime.id) return;
+    if (message?.kind === 'np:aac-start') {
+        if (sender.url !== chrome.runtime.getURL('pocket/window.html')) return;
+        if (startingAAC) { respond({ ok: false, error: '処理中です。' }); return; }
+        startingAAC = true;
+        void (async () => {
+            const stored = await chrome.storage.session.get(['np:aacJob', 'np:videoContext']);
+            if (!terminalAAC(stored['np:aacJob'])) throw new Error('AACの処理中です。');
+            const context = stored['np:videoContext'];
+            if (!context || context.videoId !== message.videoId || context.sourceTabId !== message.sourceTabId
+                || context.sourceUrl !== message.sourceUrl) throw new Error('表示中の動画情報が変わりました。開き直してください。');
+            const state = { id: crypto.randomUUID(), phase: 'starting', videoId: context.videoId,
+                sourceTabId: context.sourceTabId, title: NicoPocketTitle.normalize(message.title, context.videoId), startedAt: Date.now() };
+            await chrome.storage.session.set({ 'np:aacJob': state });
+            try {
+                // Receiver verifies the current watch ID again immediately before execution.
+                const reply = await chrome.tabs.sendMessage(context.sourceTabId, {
+                    kind: 'np:aac-run', jobId: state.id, videoId: context.videoId, title: state.title
+                }, { frameId: 0 });
+                if (!reply?.ok) throw new Error(reply?.error || '取得元タブでAAC処理を開始できませんでした。');
+                return { ok: true, jobId: state.id };
+            } catch (error) {
+                await updateAAC(state.id, { phase: 'error', error: error.message });
+                throw error;
+            }
+        })().then(respond, error => respond({ ok: false, error: error.message || '取得開始に失敗しました。' }))
+            .finally(() => { startingAAC = false; });
+        return true;
+    }
+    if (!['np:aac-event', 'np:aac-save-ready'].includes(message?.kind) || !sender.tab || sender.frameId !== 0) return;
+    void (async () => {
+        const stored = await chrome.storage.session.get('np:aacJob');
+        const state = stored['np:aacJob'];
+        if (!state || state.id !== message.jobId || state.sourceTabId !== sender.tab.id || terminalAAC(state)) return { ok: false };
+        if (message.kind === 'np:aac-save-ready') {
+            if (typeof message.url !== 'string' || !message.url.startsWith('blob:https://www.nicovideo.jp/')) return { ok: false };
+            await updateAAC(state.id, { phase: 'saving', saveUrl: message.url, saveReadyAt: Date.now() });
+        } else if (['acquiring', 'saving', 'error'].includes(message.phase)) {
+            await updateAAC(state.id, { phase: message.phase, error: typeof message.error === 'string' ? message.error.slice(0, 500) : undefined });
+        }
+        return { ok: true };
+    })().then(respond, () => respond({ ok: false }));
+    return true;
+});
+chrome.downloads.onCreated.addListener(item => {
+    void (async () => {
+        const stored = await chrome.storage.session.get('np:aacJob');
+        const state = stored['np:aacJob'];
+        if (!state || terminalAAC(state) || !state.saveUrl || ![item.url, item.finalUrl].includes(state.saveUrl)) return;
+        await updateAAC(state.id, { downloadId: item.id, saveUrl: null });
+        const records = await chrome.downloads.search({ id: item.id });
+        if (records[0]?.state === 'complete') await updateAAC(state.id, { phase: 'complete' });
+        if (records[0]?.state === 'interrupted') await updateAAC(state.id, { phase: 'error', error: 'AACの保存が中断されました。再度実行できます。' });
+    })().catch(console.error);
+});
+chrome.downloads.onChanged.addListener(delta => {
+    if (!['complete', 'interrupted'].includes(delta.state?.current)) return;
+    void (async () => {
+        const stored = await chrome.storage.session.get('np:aacJob');
+        const state = stored['np:aacJob'];
+        if (state?.downloadId !== delta.id) return;
+        await updateAAC(state.id, delta.state.current === 'complete'
+            ? { phase: 'complete' } : { phase: 'error', error: 'AACの保存が中断されました。再度実行できます。' });
+    })().catch(console.error);
+});
+chrome.tabs.onRemoved.addListener(tabId => {
+    void chrome.storage.session.get('np:aacJob').then(stored => {
+        const state = stored['np:aacJob'];
+        if (state?.sourceTabId === tabId) return updateAAC(state.id, { phase: 'error', error: '取得元タブが閉じられました。' });
+    }).catch(console.error);
+});

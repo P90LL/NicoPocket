@@ -32,9 +32,7 @@ function render(context) {
     document.getElementById('video-status').textContent = context.incomplete
         ? '一部の動画情報を取得できませんでした。動画ページから再度開いてください。'
         : '現在の動画情報を読み込みました。';
-    const count = context.audioQualities.filter(audio => audio.available).length;
-    document.getElementById('audio-info').textContent = '標準音質は192 kbps以下の最高品質、高音質は最高品質を使用します。192 kbps以下がない場合も元音源のまま保存します。'
-        + (count ? ` 利用可能な音声品質情報: ${count}件。` : ' 音声品質情報は未取得です。');
+    document.getElementById('audio-info').textContent = '標準音質は192 kbps以下の最高品質、高音質は最高品質を使用します。192 kbps以下がない場合も元音源のまま保存します。';
     NicoPocketArtwork.setContext(context, NicoPocketEditor);
 }
 titleInput.addEventListener('input', () => { NicoPocketEditor.title = titleInput.value; renderMetadata(); });
@@ -72,6 +70,7 @@ function syncAACButton() {
     if (aacState?.phase === 'acquiring' && Number.isFinite(aacState.progress)) progress.value = aacState.progress;
     else progress.removeAttribute('value');
     const labels = { starting: 'AAC取得を開始しています…', acquiring: '音声を取得しています…' + (Number.isFinite(aacState?.progress) ? ` ${aacState.progress}%` : ''), processing: 'M4Aを生成しています…（Metadata・Artworkを設定）', saving: aacState?.paused || aacState?.saveStatus === 'waiting' ? '保存待ちです。Chromeの許可・保存先を確認してください。キャンセルして再試行することもできます。' : 'M4Aを保存しています…', complete: 'M4Aの保存が完了しました。' };
+    document.getElementById('save-status').dataset.phase = aacState?.phase || '';
     document.getElementById('save-status').dataset.error = String(aacState?.phase === 'error');
     renderMetadata();
     document.getElementById('save-status').textContent = aacState?.phase === 'error'
@@ -79,6 +78,7 @@ function syncAACButton() {
         : labels[aacState?.phase] || '選択した音質を再エンコードせずM4Aとして保存します。';
 }
 async function artworkForDownload(context) {
+    await NicoPocketArtwork.ready(context);
     const artwork = NicoPocketEditor.artwork;
     const blob = artwork?.blob;
     if (!blob || blob.type !== 'image/jpeg' || blob.size > 2 * 1024 * 1024
@@ -122,7 +122,7 @@ function renderMetadata() {
     if (!context) return;
     const tags = NicoPocketMetadata.build({ ...context, title: NicoPocketTitle.normalize(NicoPocketEditor.title, context.videoId) });
     const labels = { title: 'Title', artist: 'Artist', episode_id: 'Video ID', comment: 'Video URL', genre: 'Genre', album: 'Series / Album', album_artist: 'Album Artist', date: 'Date', creation_time: 'Creation Time' };
-    const values = { ...tags, artwork: NicoPocketEditor.artwork?.blob ? '768 × 768 JPEG' : 'なし（未編集・取得失敗時）' };
+    const values = { ...tags, artwork: NicoPocketEditor.artwork?.blob ? '768 × 768 JPEG' : 'なし（画像の取得・生成失敗時）' };
     for (const [key, value] of Object.entries(values)) {
         const row = document.createElement('div'), term = document.createElement('dt'), description = document.createElement('dd');
         term.textContent = labels[key] || 'Artwork'; description.textContent = value;

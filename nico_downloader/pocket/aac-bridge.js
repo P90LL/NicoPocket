@@ -2,6 +2,7 @@
 // No playlist, segment, FFmpeg argument or Blob implementation is duplicated.
 (() => {
     let active = null;
+    const owned = downloader => downloader._nicoPocketJob?.outputOwner === 'nicopocket';
     const currentId = () => /^\/watch\/([a-zA-Z0-9]+)\/?$/.exec(location.pathname)?.[1];
     const sameSource = job => active === job && currentId() === job.videoId;
     const notify = (job, phase, error) => chrome.runtime.sendMessage({
@@ -50,17 +51,17 @@
     };
     const makeName = NicoDownloaderClass.prototype.VideoDownloadNameMake;
     NicoDownloaderClass.prototype.VideoDownloadNameMake = function (...args) {
-        return active ? active.title + '.m4a' : makeName.apply(this, args);
+        return owned(this) ? this._nicoPocketJob.title + '.m4a' : makeName.apply(this, args);
     };
     const legacySave = NicoDownloaderClass.prototype.DownloadLinkClick;
     NicoDownloaderClass.prototype.DownloadLinkClick = function (...args) {
         // VideoDown and the page-wide click handler must never click a pending legacy link.
-        if (active || this._nicoPocketJob) return false;
+        if ((typeof NicoPocketUI !== 'undefined') || active || owned(this)) return false;
         return legacySave.apply(this, args);
     };
     const buttonText = NicoDownloaderClass.prototype.ButtonTextWrite;
     NicoDownloaderClass.prototype.ButtonTextWrite = function (text) {
-        const job = this._nicoPocketJob || active;
+        const job = owned(this) ? this._nicoPocketJob : null;
         if (!job) return buttonText.call(this, text);
         if (!sameSource(job) || job.saving) return;
         const match = String(text).match(/([0-9]+(?:\.[0-9]+)?)%/);
@@ -72,19 +73,19 @@
             }
         }
     };
-    const firstButton = NicoDownloaderClass.prototype.ButtonFirstMake;
-    NicoDownloaderClass.prototype.ButtonFirstMake = function () {
-        if (!active) return firstButton.call(this);
-        let row = document.getElementById(VideoData.Video_DLlink.p);
-        if (!row) {
-            row = document.createElement('p'); row.id = VideoData.Video_DLlink.p;
-            row.hidden = true; document.body.append(row);
-        }
-        if (!document.getElementById(VideoData.Video_DLlink.a)) {
-            const status = document.createElement('span'); status.id = VideoData.Video_DLlink.a;
-            row.append(status);
-        }
-        return true;
+    // Keep page UI methods inert for this job, even after its async completion.
+    for (const name of ['ButtonFirstMake', 'ButtonInnerHTMLWrite', 'SaveButtonMake', 'VideoTitleElementCheck']) {
+        const original = NicoDownloaderClass.prototype[name];
+        NicoDownloaderClass.prototype[name] = function (...args) {
+            if (owned(this)) return true;
+            return original.apply(this, args);
+        };
+    }
+    const firstSettings = NicoDownloaderClass.prototype.NicoDownloaderFirstSettingCheck;
+    NicoDownloaderClass.prototype.NicoDownloaderFirstSettingCheck = function () {
+        // Upstream checks its button's HTML; owned jobs check the prepared setting instead.
+        if (owned(this)) return this.Savemode !== '0';
+        return firstSettings.call(this);
     };
     const check = NicoDownloaderClass.prototype.CheckBeforeDownload;
     NicoDownloaderClass.prototype.CheckBeforeDownload = function () {
@@ -111,8 +112,7 @@
             },
             print: message => {
                 if (!sameSource(job)) return;
-                options.print?.(message); // Original Blob and save-link generation.
-                if (String(message).startsWith('FFMPEG_END')) void save(job);
+                options.print?.(message); // Shared output extraction; owned jobs bypass legacy links.
             }
         });
         job.core = core;
@@ -229,22 +229,22 @@
         }, () => failed(job, '音声プレイリストの取得に失敗しました。'));
         return task;
     };
-    async function save(job) {
+    async function save(job, blob, filename) {
         if (!sameSource(job) || job.saving) return;
         job.saving = true;
         try {
-            const link = document.getElementById(VideoData.Video_DLlink.a2);
-            if (!link?.href.startsWith('blob:') || !link.download.endsWith('.m4a')) {
-                throw new Error('M4A保存用リンクを生成できませんでした。');
+            if (!(blob instanceof Blob) || blob.type !== 'audio/mp4' || filename !== job.title + '.m4a') {
+                throw new Error('M4A保存データを確認できませんでした。');
             }
-            job.blobUrl = link.href;
+            job.blobUrl = URL.createObjectURL(blob);
             job.saveDeadline = setTimeout(() => failed(job, '保存開始待ちがタイムアウトしました。Chromeの許可・保存先を確認して再試行してください。'), 60000);
-            const ready = await chrome.runtime.sendMessage({ kind: 'np:aac-save-ready', jobId: job.id, url: link.href });
+            const ready = await chrome.runtime.sendMessage({ kind: 'np:aac-save-ready', jobId: job.id, url: job.blobUrl });
             if (!ready?.ok) throw new Error(ready?.error || 'Chrome側で保存を開始できませんでした。許可や保存先を確認して再試行してください。');
             guard(job);
-            // Execute exactly this validated M4A link, never the generic legacy handler.
+            // A detached, job-owned final M4A link; never expose a legacy save control.
+            const link = document.createElement('a');
+            link.href = job.blobUrl; link.download = filename;
             link.click();
-            link.remove();
         } catch (error) { failed(job, error.message || 'M4Aの保存開始に失敗しました。'); }
     }
     async function prepare(job) {
@@ -272,7 +272,7 @@
         const staleLink = document.getElementById(VideoData.Video_DLlink.a2);
         if (staleLink?.href.startsWith('blob:')) URL.revokeObjectURL(staleLink.href);
         staleLink?.remove();
-        const result = await VideoDown({ isCurrent: () => sameSource(job) });
+        const result = await VideoDown({ outputOwner: 'nicopocket', job, isCurrent: () => sameSource(job) });
         if (result === false) throw new Error('既存AAC取得処理を開始できませんでした。');
     }
     chrome.runtime.onMessage.addListener((message, sender, respond) => {
@@ -289,9 +289,10 @@
         if (active || message.videoId !== currentId() || location.origin !== 'https://www.nicovideo.jp') {
             respond({ ok: false, error: '処理中、または取得元動画が切り替わっています。' }); return;
         }
-        const job = { controller: new AbortController(), id: message.jobId, videoId: message.videoId, title: NicoPocketTitle.normalize(message.title, message.videoId), metadata: message.metadata || {}, artwork: Array.isArray(message.artwork) ? message.artwork : null };
+        const job = { outputOwner: 'nicopocket', controller: new AbortController(), id: message.jobId, videoId: message.videoId, title: NicoPocketTitle.normalize(message.title, message.videoId), metadata: message.metadata || {}, artwork: Array.isArray(message.artwork) ? message.artwork : null };
         job.requestedQuality = message.requestedQuality === 'high' ? 'high' : 'standard';
         job.audioQualities = Array.isArray(message.audioQualities) ? message.audioQualities : [];
+        job.onOutput = (blob, filename) => { void save(job, blob, filename); };
         active = job;
         job.watch = setInterval(() => {
             if (!sameSource(job)) failed(job, '取得元動画が切り替わりました。現在の動画から開き直してください。');
@@ -309,5 +310,5 @@
         }
     });
     window.addEventListener('pagehide', () => { if (active) failed(active, '取得元タブが閉じられたか再読み込みされました。'); });
-    globalThis.NicoPocketAAC = { get busy() { return Boolean(active); } };
+    globalThis.NicoPocketAAC = { owns: job => sameSource(job), get busy() { return Boolean(active); } };
 })();

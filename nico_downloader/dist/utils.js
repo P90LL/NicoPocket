@@ -238,6 +238,7 @@ async function DownEncoder(NicoDownloader, m3u8s, Nicovideo) {
       parseFFmpegProgress(e, NicoDownloader);
       if (e.startsWith("FFMPEG_END")) {
         // FFMPEG_ENDで終了
+        if ((typeof NicoPocketUI !== 'undefined') && NicoDownloader._nicoPocketJob?.outputOwner !== 'nicopocket') return;
         //終了時の処理
         NicoDownloader.ButtonTextWrite("変換終了");
         DebugPrint("FFMPEG_END 変換終了");
@@ -256,6 +257,13 @@ async function DownEncoder(NicoDownloader, m3u8s, Nicovideo) {
               type: FiletypeToMimetype(NicoDownloader.CheckVideoFormat()),
             });
             DebugPrint("Blob作成完了");
+
+            const outputJob = NicoDownloader._nicoPocketJob;
+            if (outputJob?.outputOwner === 'nicopocket') {
+              core.FS.unlink(NicoDownloader.FSOutputFileNameGet());
+              outputJob.onOutput(blob, Nicovideo.video_name);
+              return; // No legacy link, body click or page-side completion UI.
+            }
 
             //ディスクへの保存処理
             const a = document.createElement("a");

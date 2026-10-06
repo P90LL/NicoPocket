@@ -21,7 +21,14 @@ const NicoPocketUI = (() => {
         button.dataset.nicopocketEditor = 'true';
         button.textContent = 'NicoPocketで保存';
     }
+    function discardLegacyLink() {
+        // Only the upstream link ID belongs to this integration; leave other page downloads alone.
+        const link = document.getElementById('downloadlink');
+        if (link?.href.startsWith('blob:')) URL.revokeObjectURL(link.href);
+        link?.remove();
+    }
     function placeButton() {
+        if (watchPage()) discardLegacyLink();
         if (globalThis.NicoPocketAAC?.busy) return;
         if (!watchPage()) {
             document.querySelector('[data-nicopocket-created-slot]')?.remove();
@@ -77,6 +84,10 @@ const NicoPocketUI = (() => {
     }
     function intercept(event) {
         if (!watchPage()) return;
+        const legacy = event.target instanceof Element ? event.target.closest('a#downloadlink') : null;
+        if (legacy) {
+            event.preventDefault(); event.stopImmediatePropagation(); discardLegacyLink(); return;
+        }
         const button = event.target instanceof Element
             ? event.target.closest('[data-nicopocket-editor],button,a,[role="button"]') : null;
         if (!button || (!button.hasAttribute('data-nicopocket-editor') && !legacyLabel(button))) return;

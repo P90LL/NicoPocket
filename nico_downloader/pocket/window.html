@@ -18,7 +18,6 @@
     <button id="close-editor" class="secondary" type="button">閉じる</button>
   </header>
   <main>
-    <div class="page-heading"><div><p class="eyebrow">EDIT WINDOW</p><h1>保存内容を編集</h1><p>タイトル・Artwork・音質を確認します。</p></div></div>
     <div class="review-layout">
       <section class="card review-main" aria-labelledby="title-heading">
         <div class="section-heading"><div><h2 id="title-heading">保存内容</h2><p id="video-status" role="status">動画情報を読み込んでいます…</p></div></div>
@@ -33,25 +32,29 @@
             <p id="audio-info" class="subtle">標準音質は192 kbps基準。高音質は取得可能な元音源を使用します。</p>
           </div>
         </div>
-        <details class="metadata-summary"><summary>保存するMetadata</summary><dl id="metadata-preview"></dl></details>
+        <details class="metadata-summary"><summary>保存するメタデータ</summary><dl id="metadata-preview"></dl></details>
       </section>
+      <div class="artwork-column">
       <aside class="card cover-summary" aria-labelledby="artwork-heading">
         <div class="section-heading"><h2 id="artwork-heading">Artwork</h2><span id="artwork-state" class="status-pill">未設定</span></div>
         <div class="cover-preview"><img id="artwork-image" alt="現在の動画のサムネイル" referrerpolicy="no-referrer" hidden /><span id="artwork-empty">サムネイル未取得</span></div>
         <p id="artwork-note">元のサムネイルです。1:1の正方形に編集できます。</p>
         <button id="artwork-edit" class="secondary full" type="button" disabled>Artworkを編集</button>
-        <button id="artwork-original" class="secondary full" type="button" disabled>元画像へ戻す</button>
       </aside>
+      <div class="action-row download-actions"><button id="download" class="primary full" type="button" aria-describedby="save-status" disabled>Download</button><button id="cancel-download" class="secondary full" type="button" hidden>キャンセル</button></div>
+      <progress id="download-progress" max="100" hidden aria-label="ダウンロード進捗"></progress>
+      <p id="save-status" class="subtle" role="status">M4Aとして保存します。</p>
+      </div>
     </div>
-    <div class="action-row"><button id="cancel-download" class="secondary" type="button" hidden>キャンセル</button><button id="download" class="primary" type="button" aria-describedby="save-status" disabled>Download</button></div>
-    <progress id="download-progress" max="100" hidden aria-label="ダウンロード進捗"></progress>
-    <p id="save-status" class="subtle" role="status">M4Aとして保存します。</p>
   </main>
 </div>
 <dialog id="artwork-dialog" aria-labelledby="artwork-dialog-title">
   <h2 id="artwork-dialog-title">Artworkを編集</h2>
   <p class="subtle">固定1:1 · 画像をドラッグして位置を調整</p>
-  <canvas id="artwork-canvas" width="768" height="768" tabindex="0" aria-label="正方形Artworkプレビュー。ドラッグまたは矢印キーで位置を調整"></canvas>
+  <div class="artwork-stage">
+    <canvas id="artwork-background" width="1200" height="768" aria-hidden="true"></canvas>
+    <canvas id="artwork-canvas" width="768" height="768" tabindex="0" aria-label="明るい正方形が最終Artwork。ドラッグまたは矢印キーで位置を調整"></canvas>
+  </div>
   <label for="artwork-zoom">ズーム <output id="artwork-zoom-value" for="artwork-zoom">100%</output></label>
   <input id="artwork-zoom" type="range" min="1" max="4" step="0.01" value="1" />
   <p id="artwork-edit-status" class="subtle" role="status"></p>

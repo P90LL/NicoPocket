@@ -1,9 +1,17 @@
 //ダウンロード関数
 
 async function VideoDown(request) {
+    // In the NicoPocket product, acquisition starts only through an owned request.
+    if ((typeof NicoPocketUI !== 'undefined') && (request?.outputOwner !== 'nicopocket' || !request.job
+        || globalThis.NicoPocketAAC?.owns(request.job) !== true)) return false;
     // 必要なクラスの初期化
     const NicoDownloader = new NicoDownloaderClass(); //NicoDownloaderクラスの初期化
     const Nicovideo = new NicovideoClass(); //NicovideoClassクラスの初期化
+    // Bind ownership before any legacy UI or save method can run.
+    if (request?.outputOwner === 'nicopocket') {
+        NicoDownloader._nicoPocketJob = request.job;
+        NicoDownloader._nicoPocketMetadata = { ...request.job.metadata, title: request.job.title, videoId: request.job.videoId };
+    }
 
     //そもそもマッチするか確認
     if (Nicovideo.CheckNicovideoWatchURL() == false) return false;

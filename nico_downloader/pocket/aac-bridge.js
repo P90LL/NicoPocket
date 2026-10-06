@@ -45,7 +45,7 @@
     Option_setLoading = function (name) {
         if (active && name === 'downFile_setting') return 'm4a';
         if (active && name === 'video_pattern') return active.videoId;
-        if (active && name === 'video_hlssave' && (!localStorage.getItem(name) || localStorage.getItem(name) === 'undefined')) return '1';
+        if (active && name === 'video_hlssave' && (!localStorage.getItem(name) || ['undefined', '0'].includes(localStorage.getItem(name)))) return '1';
         return option(name);
     };
     const makeName = NicoDownloaderClass.prototype.VideoDownloadNameMake;
@@ -238,7 +238,7 @@
                 throw new Error('M4A保存用リンクを生成できませんでした。');
             }
             job.blobUrl = link.href;
-            job.saveDeadline = setTimeout(() => failed(job, 'Chrome側で保存が完了していません。許可・保存先を確認して再試行してください。'), 60000);
+            job.saveDeadline = setTimeout(() => failed(job, '保存開始待ちがタイムアウトしました。Chromeの許可・保存先を確認して再試行してください。'), 60000);
             const ready = await chrome.runtime.sendMessage({ kind: 'np:aac-save-ready', jobId: job.id, url: link.href });
             if (!ready?.ok) throw new Error(ready?.error || 'Chrome側で保存を開始できませんでした。許可や保存先を確認して再試行してください。');
             guard(job);
@@ -251,7 +251,9 @@
         const values = await chrome.storage.local.get(['video_hlssave', 'video_pattern', 'language_setting', 'debug', 'downFile_setting']);
         guard(job);
         for (const [key, value] of Object.entries(values)) if (value != null) localStorage.setItem(key, String(value));
-        if (values.video_hlssave == null) localStorage.setItem('video_hlssave', '1');
+        if (!values.video_hlssave || values.video_hlssave === '0') localStorage.setItem('video_hlssave', '1');
+        if (!values.language_setting) localStorage.setItem('language_setting', 'ja');
+        if (values.debug == null) localStorage.setItem('debug', '0');
         const downloader = new NicoDownloaderClass();
         const settings = document.querySelector(VideoData.PlayerSettingQuery);
         if (!downloader.MasterURLGet()) settings?.click();

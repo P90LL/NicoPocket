@@ -87,6 +87,26 @@ async function applyAACUpdate(id, changes) {
 }
 chrome.runtime.onMessage.addListener((message, sender, respond) => {
     if (sender.id !== chrome.runtime.id) return;
+    if (message?.kind === 'np:aac-check-save' && sender.url === chrome.runtime.getURL('pocket/window.html')) {
+        void (async () => {
+            const state = (await chrome.storage.session.get('np:aacJob'))['np:aacJob'];
+            if (!state || state.id !== message.jobId || state.phase !== 'saving' || state.downloadId == null) return { ok: false };
+            const item = (await chrome.downloads.search({ id: state.downloadId }))[0];
+            if (!item) return { ok: false };
+            if (item.state === 'complete') await updateAAC(state.id, { phase: 'complete' });
+            else if (item.state === 'interrupted') await updateAAC(state.id, { phase: 'error', error: '保存が中断されました。Chromeの許可・保存先を確認して再試行してください。' });
+            else {
+                const bytes = Number.isFinite(item.bytesReceived) ? item.bytesReceived : 0;
+                const activity = bytes !== state.saveBytes ? Date.now() : state.saveActivityAt || state.saveReadyAt;
+                if (Date.now() - activity > 10 * 60 * 1000) {
+                    await updateAAC(state.id, { phase: 'error', error: '保存待ちがタイムアウトしました。Chromeの許可・保存先を確認して再試行してください。' });
+                } else await updateAAC(state.id, { saveBytes: bytes, saveActivityAt: activity,
+                    paused: item.paused === true, saveStatus: item.paused || !item.filename || bytes === 0 ? 'waiting' : 'writing' });
+            }
+            return { ok: true };
+        })().then(respond, () => respond({ ok: false }));
+        return true;
+    }
     if (message?.kind === 'np:aac-cancel' && sender.url === chrome.runtime.getURL('pocket/window.html')) {
         void chrome.storage.session.get('np:aacJob').then(async stored => {
             const state = stored['np:aacJob'];
@@ -146,7 +166,7 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
         if (message.kind === 'np:aac-save-ready') {
             if (typeof message.url !== 'string' || !message.url.startsWith('blob:https://www.nicovideo.jp/')) return { ok: false };
             if (state.saveReadyAt) return { ok: false, error: '保存要求は既に開始済みです。' };
-            await updateAAC(state.id, { phase: 'saving', saveUrl: message.url, saveReadyAt: Date.now() });
+            await updateAAC(state.id, { phase: 'saving', saveUrl: message.url, saveReadyAt: Date.now(), saveActivityAt: Date.now(), saveStatus: 'waiting' });
             const owners = (await chrome.storage.session.get('np:saveTargets'))['np:saveTargets'] || [];
             await chrome.storage.session.set({ 'np:saveTargets': [...owners, { id: state.id, url: message.url }].slice(-20) });
             return { ok: true };
@@ -186,7 +206,7 @@ chrome.downloads.onChanged.addListener(delta => {
         if (state?.downloadId !== delta.id) return;
         if (delta.paused?.current != null && !['complete', 'interrupted'].includes(delta.state?.current)) {
             await updateAAC(state.id, delta.paused.current
-                ? { phase: 'error', error: 'Chrome側でダウンロードが保留されています。許可・保存先を確認して再試行してください。' }
+                ? { paused: true, saveStatus: 'waiting' }
                 : { paused: false }); return;
         }
         await updateAAC(state.id, delta.state.current === 'complete'

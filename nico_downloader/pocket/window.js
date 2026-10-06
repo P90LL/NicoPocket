@@ -71,7 +71,7 @@ function syncAACButton() {
     progress.hidden = !running;
     if (aacState?.phase === 'acquiring' && Number.isFinite(aacState.progress)) progress.value = aacState.progress;
     else progress.removeAttribute('value');
-    const labels = { starting: 'AAC取得を開始しています…', acquiring: '音声を取得しています…' + (Number.isFinite(aacState?.progress) ? ` ${aacState.progress}%` : ''), processing: 'M4Aを生成しています…（Metadata・Artworkを設定）', saving: aacState?.paused ? 'Chrome側でダウンロードが保留されています。許可・保存先を確認してください。キャンセル後に再試行できます。' : 'M4Aを保存しています…', complete: 'M4Aの保存が完了しました。' };
+    const labels = { starting: 'AAC取得を開始しています…', acquiring: '音声を取得しています…' + (Number.isFinite(aacState?.progress) ? ` ${aacState.progress}%` : ''), processing: 'M4Aを生成しています…（Metadata・Artworkを設定）', saving: aacState?.paused || aacState?.saveStatus === 'waiting' ? '保存待ちです。Chromeの許可・保存先を確認してください。キャンセルして再試行することもできます。' : 'M4Aを保存しています…', complete: 'M4Aの保存が完了しました。' };
     document.getElementById('save-status').dataset.error = String(aacState?.phase === 'error');
     renderMetadata();
     document.getElementById('save-status').textContent = aacState?.phase === 'error'
@@ -121,7 +121,7 @@ function renderMetadata() {
     target.replaceChildren();
     if (!context) return;
     const tags = NicoPocketMetadata.build({ ...context, title: NicoPocketTitle.normalize(NicoPocketEditor.title, context.videoId) });
-    const labels = { title: 'Title', artist: 'Artist', episode_id: 'Video ID', comment: 'Video URL', genre: 'Genre', album: 'Album', album_artist: 'Album Artist', date: 'Date', creation_time: 'Creation Time' };
+    const labels = { title: 'Title', artist: 'Artist', episode_id: 'Video ID', comment: 'Video URL', genre: 'Genre', album: 'Series / Album', album_artist: 'Album Artist', date: 'Date', creation_time: 'Creation Time' };
     const values = { ...tags, artwork: NicoPocketEditor.artwork?.blob ? '768 × 768 JPEG' : 'なし（未編集・取得失敗時）' };
     for (const [key, value] of Object.entries(values)) {
         const row = document.createElement('div'), term = document.createElement('dt'), description = document.createElement('dd');
@@ -133,3 +133,10 @@ window.addEventListener('np:artwork-change', renderMetadata);
 document.getElementById('cancel-download').addEventListener('click', () => {
     if (aacState?.id) void chrome.runtime.sendMessage({ kind: 'np:aac-cancel', jobId: aacState.id }).catch(() => {});
 });
+
+// Poll only the owned save record while the editor is open; no global download scan.
+setInterval(() => {
+    if (aacState?.phase === 'saving' && aacState.downloadId != null) {
+        void chrome.runtime.sendMessage({ kind: 'np:aac-check-save', jobId: aacState.id }).catch(() => {});
+    }
+}, 5000);

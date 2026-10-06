@@ -73,7 +73,6 @@ const runFFmpeg_m3u8 = async (
       "-map_chapters", "-1", ...metadataArgs, "-f", "mp4",
       NicoDownloader.FSOutputFileNameGet(),
     ];
-    console.log(`FFmpegコマンド: ffmpeg ${ffmpegArgs.join(" ")}`);
     ffmpeg(Core, ffmpegArgs);
     // The existing print callback creates the Blob and removes the FS output.
     await waitEnd;
@@ -106,11 +105,6 @@ const runFFmpeg_m3u8 = async (
     const outputFileName = NicoDownloader.FSOutputFileNameGet();
 
     DebugPrint(`OutputFileName: ${outputFileName}`);
-
-    console.log("=== FFmpeg変換開始 ===");
-    console.log(`入力ファイル: ${m3u8name}`);
-    console.log(`出力ファイル: ${outputFileName}`);
-    console.log(`変換モード: ${mode}`);
 
     //ffmpeg実行
     ffmpeg(Core, [
@@ -166,8 +160,6 @@ const runFFmpeg_m3u8 = async (
       ...(mode === "aac" ? ["-vn", "-c:a", "copy"] : ["-c", "copy"]),
       outputFileName
     ];
-    console.log(`FFmpegコマンド: ffmpeg ${ffmpegArgs.join(" ")}`);
-    console.log("=== 変換処理開始 ===");
   } catch (err) {
     //エラーが出たら
     DebugPrint("runFFmpeg:" + err);
@@ -234,8 +226,6 @@ async function DownEncoder(NicoDownloader, m3u8s, Nicovideo) {
   //https://github.com/naari3/nico-downloader-ffmpeg/blob/main/src/background.ts  //偉大なる@_naari_氏による協力に感謝いたします
   let file = null;
   
-  console.log("=== FFmpeg初期化開始 ===");
-  
   const core = await createFFmpegCore({
     printErr: (e) => {
       DebugPrint(`FFMPEG:${e}`);
@@ -257,7 +247,6 @@ async function DownEncoder(NicoDownloader, m3u8s, Nicovideo) {
             //NicoDownloader.FSOutputFileNameSet(Nicovideo);
 
             file = core.FS.readFile(NicoDownloader.FSOutputFileNameGet());
-            console.log({ file });
 
             //ファイルの保存処理
             DebugPrint("ファイルの保存処理");
@@ -294,7 +283,6 @@ async function DownEncoder(NicoDownloader, m3u8s, Nicovideo) {
       }
     },
   });
-  console.debug({ core });
 
   //URLsを片っ端から処理
   //落としてファイルシステムにいれていく
@@ -342,7 +330,7 @@ async function DownEncoder(NicoDownloader, m3u8s, Nicovideo) {
           resolve(filename);
         }
       ).catch(error => {
-        console.error(`ダウンロードエラー: ${NicoDownloader.TSURLs[i]}`, error);
+        console.error("音声セグメント取得エラー", error);
         reject(error);
       });
     });
@@ -420,7 +408,7 @@ async function Downloadblob(url, NicoDownloader) {
     
     return blob;
   } catch (error) {
-    console.error(`Blob取得エラー: ${url}`, error);
+    console.error("Blob取得エラー", error);
     throw error;
   }
 }
@@ -445,7 +433,7 @@ async function DownloadUint8Array(url, NicoDownloader) {
     
     return byte;
   } catch (error) {
-    console.error(`Uint8Array取得エラー: ${url}`, error);
+    console.error("音声データ取得エラー", error);
     throw error;
   }
 }
@@ -464,8 +452,6 @@ async function Transcode(Core, m3u8name, NicoDownloader, Nicovideo) {
   NicoDownloader.ButtonTextWrite("変換中");
   let mode = await Option_setLoading("downFile_setting") || "mp4"; // モードを取得
   if (mode == 0) mode = "mp4"; // モードが取得できなかった場合はデフォルトのmp4にする
-
-  console.log(`Current mode: ${mode}`); // モードを確認するログ
   const file = await runFFmpeg_m3u8(
     Core,
     m3u8name,
@@ -567,7 +553,6 @@ function parseFFmpegProgress(output, NicoDownloader) {
     const currentFrame = parseInt(frameMatch[1]);
     // 進捗ログの頻度を制限（100フレームごと）
     if (currentFrame % 100 === 0) {
-      console.log(`変換進捗: フレーム ${currentFrame} 処理中`);
     }
   }
 
@@ -575,28 +560,24 @@ function parseFFmpegProgress(output, NicoDownloader) {
   const timeMatch = output.match(/time=(\d{2}:\d{2}:\d{2}\.\d{2})/);
   if (timeMatch) {
     const currentTime = timeMatch[1];
-    console.log(`変換進捗: 時刻 ${currentTime} まで処理完了`);
   }
 
   // 速度情報を検出
   const speedMatch = output.match(/speed=\s*([\d.]+)x/);
   if (speedMatch) {
     const speed = parseFloat(speedMatch[1]);
-    console.log(`変換速度: ${speed}x (リアルタイムの${speed}倍速)`);
   }
 
   // ビットレート情報を検出
   const bitrateMatch = output.match(/bitrate=\s*([\d.]+)kbits\/s/);
   if (bitrateMatch) {
     const bitrate = parseFloat(bitrateMatch[1]);
-    console.log(`現在のビットレート: ${bitrate} kbits/s`);
   }
 
   // ファイルサイズ情報を検出
   const sizeMatch = output.match(/size=\s*(\d+)kB/);
   if (sizeMatch) {
     const size = parseInt(sizeMatch[1]);
-    console.log(`出力ファイルサイズ: ${size} kB`);
   }
 
   // 進捗パーセンテージを推定してボタンに表示

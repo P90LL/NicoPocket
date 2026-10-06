@@ -105,7 +105,6 @@ function Options_onload() {
 }
 
 function LoadOption(name) {
-    console.log(setOption(name))
     if (typeof setOption(name) === "undefined") {
 
     } else {

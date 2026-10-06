@@ -1,485 +1,145 @@
 # NicoPocket
 
-`nico_downloader` を基礎に、ニコニコ動画のAAC音源を  
-**アートワーク・メタデータ付きM4Aとして保存するための個人用途Chrome拡張機能**です。
+ニコニコ動画のAAC音源を、編集したタイトル・Metadata・Artwork付きのM4Aとして保存する個人用途のChrome拡張機能です。
 
-> [!NOTE]
-> NicoPocket は現在開発中です。  
-> 仕様・UI・内部実装は今後変更される可能性があります。
-
----
+**個人利用・ローカルインストール専用です。Chrome Web Storeでの公開予定はありません。**
 
 ## About
 
-NicoPocket は、現在ローカル環境で行っている以下の処理をChrome拡張機能内へ一元化することを目的としています。
-
-- 動画サムネイルを取得
-- アートワーク用にサムネイルを正方形にトリミング
-- AAC音源をM4Aコンテナへ格納
-- M4Aへアートワークを設定
-- 動画情報をメタデータとして埋め込み
-- 編集したタイトルでファイルを保存
-
-動画・音源の取得部分については、既存Chrome拡張機能  
-[`masteralice3104/nico_downloader`](https://github.com/masteralice3104/nico_downloader)  
-の実装を基礎として利用します。
-
-NicoPocketでは、`nico_downloader` の取得処理を可能な限り維持しながら、  
-**元の「取得 → 即ダウンロード」の最終保存前に、NicoPocket独自の編集・変換処理を挟む**構成を基本とします。
-
----
-
-## Concept
+[masteralice3104/nico_downloader](https://github.com/masteralice3104/nico_downloader)の動画情報・HLS/CMAF取得と同梱FFmpegを基礎にしています。音声は再エンコードせず、既存AACをM4Aコンテナへ格納します。
 
 ```text
-NicoNico
-   │
-   ▼
-NicoPocket Button
-   │
-   ▼
-Edit Window
-   ├ Title
-   ├ Artwork / Crop
-   └ Audio Quality
-   │
-   ▼
-nico_downloader
-   │
-   │ 動画情報 / HLS / AAC取得
-   ▼
-AAC Audio
-   │
-   ├──────────────┐
-   │              │
-   │        Thumbnail
-   │              │
-   │       Square Crop
-   │              │
-   └──────┬───────┘
-          ▼
-      NicoPocket
-          │
-          ├ Title
-          ├ Metadata
-          ├ Artwork
-          └ M4A Packaging
-          │
-          ▼
-     XXXXXXXX.m4a
+動画ページ → NicoPocket編集 → Download
+→ 既存音声取得 → AAC stream copy
+→ Metadata・Artwork付きM4A → 編集タイトル.m4a
 ```
 
-元の `nico_downloader` では、
-
-```text
-取得
-↓
-AAC生成
-↓
-ダウンロード
-```
-
-となる処理を、
+## Features / Initial Scope
 
-```text
-編集
-↓
-取得
-↓
-AAC生成
-↓
-NicoPocketで加工
-↓
-M4A生成
-↓
-ダウンロード
-```
+- [x] 独立したNicoPocket編集ウィンドウ
+- [x] 動画情報・元タイトル・投稿者・サムネイルの取得
+- [x] タイトル編集・禁則文字の正規化
+- [x] 1:1固定Artworkクロップ・ドラッグ・ズーム・リセット
+- [x] 標準音質 / 高音質の入力ストリーム選択
+- [x] AAC取得と再エンコードなしのM4A remux
+- [x] Metadata・JPEG Artwork埋め込み
+- [x] Metadataの保存前プレビュー
+- [x] 取得進捗・生成・保存・完了・エラー表示
+- [x] キャンセル・中断後の再試行・同一動画の連続保存
+- [x] NicoPocketの名称・アイコン・使い方案内
 
-へ変更することを基本方針とします。
+複数サイト、一括・並列Download、キュー、MP3、AIクロップは対象外です。
 
----
+### Title Edit
 
-# Features
+元動画タイトルを初期値として編集できます。禁則文字・空白・末尾の点等を共通関数で正規化し、空のタイトルは動画IDへ戻します。
 
-## Title Edit
+保存名の拡張子を除いたタイトルと、M4Aの`metadata.title`は同じ値です。保存先に同名ファイルが存在するとChromeが連番を付ける場合があります。元タイトルは編集不可の参照欄に表示します。
 
-動画タイトルを初期値として、保存前にタイトルを編集できるようにします。
+### Artwork
 
-### 予定している処理
+固定正方形の枠に対して元画像を中央配置し、余白が出ない倍率からドラッグ・ズームで調整します。適用結果は**768×768 JPEG、品質0.9**です。JPEGを再変換せずattached pictureとして埋め込みます。
 
-- 動画タイトルを初期値として取得
-- 保存前に編集可能
-- ファイル名として使用できない禁則文字を事前に正規化
-- 必要に応じて空白等も正規化
-- 空文字になった場合は動画ID等へフォールバック
-- 最終ファイル名とM4A内部の `title` を一致させる
+未編集、画像欠損・取得失敗時はArtworkなしで保存を継続します。同じ動画の編集状態はウィンドウ内で保持し、別動画で初期化します。ウィンドウを閉じた後の永続保存は行いません。
 
-例：
+PNGも同梱FFmpegで格納・音声コピー・Metadata・画像バイト一致を検証済みですが、ネイティブプレイヤー比較が未確認のためJPEGを維持しています。
 
-```text
-元タイトル
-↓
-禁則文字等を正規化
-↓
-ユーザー編集
-↓
-finalTitle
-├ finalTitle.m4a
-└ metadata.title = finalTitle
-```
+### Audio
 
----
+FFmpegの`-c:a copy`を使用します。ビットレートを上げる処理や192 kbpsへの強制再エンコードは行いません。最終保存はM4A、Blob MIME typeは`audio/mp4`です。AACやJPEGの中間ファイルは保存しません。
 
-## Artwork
+### Audio Quality
 
-ニコニコ動画のサムネイルを取得し、M4Aのアートワークとして利用します。
+初期値・別動画への切り替え時は標準音質です。
 
-### 予定している機能
+| 利用可能な候補 | 標準音質 | 高音質 |
+| --- | --- | --- |
+| 128 kbps | 128 | 128 |
+| 128 / 192 | 192 | 192 |
+| 128 / 192 / 256 | 192 | 256 |
+| 256のみ | 256 | 256 |
+| 品質不明 | 既存の既定取得 | 既存の既定取得 |
 
-- 動画サムネイル取得
-- **1:1固定の正方形トリミング**
-- トリミング位置の手動調整
-- 画像の拡大・縮小
-- プレビュー
-- 初期位置は中央
-- ArtworkとしてM4Aへ埋め込み
+標準は192 kbps以下の最高品質、該当候補がない場合は既存候補の最高品質をそのまま使用します。高音質は最高bitrateです。品質IDに明示されたkbpsを利用し、不明な値は推測しません。
 
-クロップ比率は変更せず、正方形の表示領域に対して画像側の位置・拡大率を調整する方式を想定しています。
+### Metadata
 
-```text
-Thumbnail
-↓
-1:1 Square Crop
-├ Position
-└ Zoom
-↓
-JPEG
-↓
-M4A Artwork
-```
+UIとFFmpegが同じ生成関数を使用します。取得できた項目だけを設定します。
 
-自動被写体検出やMediaPipe等は使用せず、  
-**中央配置を初期値として、必要に応じて手動調整する**構成とします。
+| 表示 | M4Aタグ / 入力 |
+| --- | --- |
+| Title | 編集・正規化済み`title` |
+| Artist | 投稿者`artist` |
+| Video ID | `episode_id` |
+| Video URL | `comment` |
+| Genre | `genre` |
+| Series / Album | `album`、取得できる場合の`album_artist` |
+| Date | 有効な投稿日時の`date` / `creation_time` |
+| Artwork | 編集済みJPEGのattached picture |
 
----
+日時はコンテナ内でUTC表記になる場合があります。Descriptionはこの版では追加していません。
 
-## Audio
+### UI
 
-ニコニコ動画から取得したAAC音源を利用します。
+元ページの「NicoPocketで保存」から独立ウィンドウを開きます。タイトル・Artwork・音質を編集し、開閉式のMetadata欄で確認してDownloadを実行します。大きな音声取得はDownload押下後に開始します。
 
-M4A化では、可能な限り音声の再エンコードを行わず、
+## Usage
 
-```text
-AAC
-↓
-M4A Container
-```
+1. Chromeで`chrome://extensions/`を開き、デベロッパーモードを有効にします。
+2. 「パッケージ化されていない拡張機能を読み込む」で、このリポジトリの **`nico_downloader/`** を選択します。
+3. ニコニコ動画の動画ページを開き、動画を再生します。
+4. 「NicoPocketで保存」を押します。
+5. 保存タイトル、Artwork、音質、Metadataを確認します。Artworkを付ける場合は編集して適用します。
+6. Downloadを押します。Chromeの許可・保存先確認が表示された場合は、Chrome側で操作してください。
+7. 中断・エラー後は再試行できます。待機中はキャンセルで解除できます。
 
-としてremuxすることを優先します。
+拡張機能更新時は拡張機能を再読み込みし、開いている動画ページも再読み込みしてください。ツールバーのNicoPocketアイコンと「拡張機能のオプション」から使い方を確認できます。
 
-例えば、
+保存形式・保存名の旧設定は表示しません。必要な既存取得設定は内部で維持し、新規利用時に必要な既定値を補います。
 
-```text
-AAC 192 kbps
-↓
--c:a copy
-↓
-M4A / AAC 192 kbps
-```
+## Development Status
 
-のように、取得したAAC音源をそのまま利用します。
+個人利用版の表示バージョンは**1.0.0**です。Chrome内部の`version`は、フォーク元の5.0.0.21から進めた**5.0.0.22**です。
 
-不要な再エンコードによる音質劣化を避けることを基本方針とします。
+Phase 1〜10の主要機能と最終整理を実装済みです。合成配信と実際の拡張機能・同梱FFmpeg・Chrome保存で回帰検証しています。合成検証は実サイトでの成功を保証するものではありません。最終的な実サイト・プレイヤー確認は利用環境で行ってください。
 
----
+実装記録と既知制限は[PHASE10.md](PHASE10.md)を参照してください。過去Phaseの記録は当時の状態を保持しています。
 
-## Audio Quality
+## Known Limitations
 
-音質選択は **標準音質 / 高音質** の2種類とします。
+- Chromeの許可UIや保存先ダイアログは自動承認しません。Chrome側で確認してください。
+- APIで保存先ダイアログを直接識別できない場合があります。保存待ち・保存中表示は取得できる状態に基づきます。待機中はキャンセルできます。
+- 保存開始を60秒確認できない場合はタイムアウトします。Download ID取得後は完了・中断監視を利用し、編集画面が開いている間は5秒ごとに自分の保存を確認します。保存量が10分変化しない場合はタイムアウトします。取得処理全体には既存の30分上限もあります。
+- 更新前からChromeに保留されている所有者不明のAAC要求は、自動キャンセルしません。Chromeで古い要求を手動キャンセルしてから新規に保存してください。
+- NicoPocketが所有する要求はジョブID・Blob URLで照合します。無関係なDownloadは変更しません。
+- 長時間・大容量の動画はブラウザメモリや同梱FFmpegの制約を受けます。
+- ニコニコ側の配信仕様、DOM、音質ID、画像ホストが変わると取得できなくなる場合があります。
+- PNGの一般的なプレイヤー比較は未確認です。JPEGを維持しています。
+- 編集画面を閉じるとArtwork編集状態は失われます。保存状態の確認・キャンセルには編集画面を使用してください。
 
-### 標準音質
+## Notes
 
-初期値です。
+個人用途の非公式ツールです。ニコニコ動画・ドワンゴ等の公式プロジェクトではありません。外部への診断ログ送信、解析、ストア配布は実装していません。
 
-**AAC 192 kbpsを基準**とします。
+## Permissions
 
-- 元音源が192 kbpsの場合 → 192 kbpsを使用
-- 元音源が192 kbps未満の場合 → 取得可能な元音源をそのまま使用
-- 元音源が192 kbpsを超える場合 → 標準音質では192 kbps相当を使用
+- `storage`: 設定、取得元情報、ジョブ・保存監視の状態を保持。
+- `downloads`: 自分の保存の監視・照合・キャンセル。
+- 画像取得ホスト: `nicovideo.cdn.nimg.jp`、既存画像の`tn.smilevideo.jp`。
+- 動画ページ上のcontent script: `www.nicovideo.jp`。
 
-元音源が192 kbpsに達していない場合でも、  
-再エンコードによって見かけ上192 kbpsへ引き上げることはしません。
+`tabs`、`scripting`、全URLのhost permissionは要求しません。ニコニコ大百科用の旧content scriptは読み込み対象から外しました。
 
-### 高音質
+## Credits
 
-ニコニコ側から**取得可能な元音源をそのまま使用**します。
+- 基礎取得処理: [masteralice3104/nico_downloader](https://github.com/masteralice3104/nico_downloader)
+- 音声処理: [FFmpeg](https://ffmpeg.org/) / 同梱ffmpeg.wasm
+- 既存FFmpeg連携が参照する実装: [naari3/nico-downloader-ffmpeg](https://github.com/naari3/nico-downloader-ffmpeg)
 
-192 kbpsを超える音源が存在する場合は、その音源を利用します。
+元プロジェクトの著作権表示と同梱資産を保持しています。NicoPocketのアイコンは既存のUIロゴから生成しています。
 
-```text
-元音源 128 kbps
-├ 標準音質 → 128 kbps
-└ 高音質   → 128 kbps
+## License
 
-元音源 192 kbps
-├ 標準音質 → 192 kbps
-└ 高音質   → 192 kbps
+プロジェクトのMIT License本文と`Copyright (c) 2021 masteralice3104`を[LICENSE](LICENSE)および`nico_downloader/LICENSE`に保持しています。追加コードも同じMIT Licenseとして扱います。
 
-元音源 256 kbps
-├ 標準音質 → 192 kbps
-└ 高音質   → 256 kbps
-```
-
-高音質モードでも、再エンコードによる疑似的な高音質化は行いません。
-
----
-
-## Metadata
-
-ニコニコ動画から取得できる情報をM4Aのメタデータとして埋め込みます。
-
-主に以下を使用します。
-
-- Title
-- Video ID
-- Uploader / Artist
-- 動画URL
-- Genre
-- Series / Album
-- Artwork
-
-取得可能で、M4Aとの相性や実用性に問題がなければ以下も利用できます。
-
-- 投稿日時
-- Description
-- その他 `nico_downloader` が取得可能な動画情報
-
-すべての項目を必須とはせず、取得できる情報から適切なものを使用します。
-
-特に、
-
-```text
-ファイル名 = metadata.title
-```
-
-となることを基本仕様とします。
-
----
-
-## UI
-
-UIは既存のNicoPocketモックを基準とします。
-
-動画ページ上のボタンを押した時点で即ダウンロードするのではなく、  
-NicoPocketの編集ウィンドウを表示します。
-
-想定フロー：
-
-```text
-動画ページ
-↓
-NicoPocketボタン
-↓
-編集ウィンドウ
-├ タイトル
-├ Artwork / Crop
-├ 音質
-└ Download
-↓
-取得開始
-↓
-M4A生成
-↓
-保存
-```
-
-動画本体・音声セグメント等の大きなデータ取得は、  
-原則として編集完了後にDownloadを実行した時点で開始します。
-
-編集ウィンドウ表示時には、必要に応じて以下の軽量な情報のみ先に取得します。
-
-- 動画ID
-- 動画タイトル
-- 投稿者情報
-- サムネイル
-- 利用可能な音声品質に関する情報
-
----
-
-# Base Project
-
-NicoPocket は以下のプロジェクトをベースとしています。
-
-- [`masteralice3104/nico_downloader`](https://github.com/masteralice3104/nico_downloader)
-
-NicoPocketでは、主に以下の既存実装を活用します。
-
-- ニコニコ動画ページ上での動作
-- 動画ID・動画情報取得
-- HLS / m3u8取得
-- 音声ストリーム取得
-- CMAF / Segment取得
-- ffmpeg.wasm
-- AAC生成
-- stream copy
-- Blob生成
-- ダウンロード処理
-- 既存メタデータ処理
-
-一方で、元プロジェクトのUIや設定画面をそのまま維持することは目的としていません。
-
-NicoPocketでは `nico_downloader` を主に **ニコニコ動画の取得エンジン** として利用し、  
-ユーザー向けUI・保存処理はNicoPocket向けに再構成します。
-
----
-
-# Development Policy
-
-NicoPocketでは、まず実用可能な状態まで完成させることを優先します。
-
-以下は初期段階では優先しません。
-
-- `nico_downloader` の取得処理の全面的な再設計
-- DOM依存の完全排除
-- 大規模なアーキテクチャ変更
-- Service Worker / Offscreen Documentへの全面移行
-- 高度なキュー管理
-- 大量の同時ダウンロード
-- 複数サイト対応
-
-既存実装を可能な限り流用し、必要な部分のみを追加・変更します。
-
-基本方針：
-
-```text
-動くものを作る
-↓
-実機で検証
-↓
-問題のある箇所だけ修正
-↓
-必要に応じて整理・改善
-```
-
----
-
-# Initial Scope
-
-初期バージョンでは以下を優先します。
-
-- [ ] NicoPocket編集ウィンドウ
-- [ ] タイトル編集
-- [ ] 禁則文字の正規化
-- [ ] サムネイル取得
-- [ ] 1:1固定の正方形クロップ
-- [ ] 手動クロップ位置調整
-- [ ] Artworkの拡大・縮小
-- [ ] 標準音質 / 高音質の選択
-- [ ] AAC取得
-- [ ] M4Aへのremux
-- [ ] Artwork埋め込み
-- [ ] Metadata埋め込み
-- [ ] 編集後タイトルでM4A保存
-
-以下は後回し、または初期版では対象外とします。
-
-- [ ] 複数動画のキュー処理
-- [ ] 並列ダウンロード
-- [ ] 高度な設定画面
-- [ ] DOM依存の削減
-- [ ] 複数サイト対応
-
----
-
-# Technical Direction
-
-主に以下の技術を利用する予定です。
-
-- Chrome Extension / Manifest V3
-- JavaScript
-- ffmpeg.wasm
-- Canvas / ImageBitmap
-- M4A / MP4 container
-- AAC
-- HLS / m3u8
-
-必要に応じて以下も利用を検討します。
-
-- Web Workers
-- Offscreen Document
-
-ただし、新しい技術の導入よりも既存の `nico_downloader` 実装との互換性を優先します。
-
----
-
-# Development Status
-
-現在は設計・実装準備段階です。
-
-まずは `nico_downloader` の既存取得処理を維持したまま、  
-保存直前にNicoPocketの編集・M4A生成処理を挟む最小構成から実装します。
-
-仕様を過度に固定せず、実機検証を行いながら必要な部分のみ調整していきます。
-
----
-
-# Usage
-
-現在開発中のため、利用手順はまだ確定していません。
-
-開発時はChromeの拡張機能管理画面から「パッケージ化されていない拡張機能」として読み込む形を想定しています。
-
-```text
-chrome://extensions/
-```
-
-1. デベロッパーモードを有効化
-2. 「パッケージ化されていない拡張機能を読み込む」を選択
-3. NicoPocketの拡張機能ディレクトリを選択
-4. ニコニコ動画の動画ページを開く
-
-具体的な手順は実装状況に応じて更新します。
-
----
-
-# Notes
-
-NicoPocketは個人用途を前提として開発しています。
-
-ニコニコ動画側の仕様変更により、取得処理等が動作しなくなる可能性があります。
-
-また、本プロジェクトはニコニコ動画・ドワンゴ等の公式プロジェクトではありません。
-
-利用にあたっては、各サービスの利用規約・著作権・関連法令を遵守してください。
-
----
-
-# Credits
-
-Base project:
-
-- [`masteralice3104/nico_downloader`](https://github.com/masteralice3104/nico_downloader)
-
-NicoPocketは `nico_downloader` の実装を基礎として開発しています。
-
-元プロジェクトの作者・コントリビューターに感謝します。
-
----
-
-# License
-
-フォーク元 `nico_downloader` は **MIT License** で公開されています。
-
-Original work:
-
-```text
-Copyright (c) 2021 masteralice3104
-```
-
-NicoPocketでは、`nico_downloader` 由来のコードおよび実質的な部分について、  
-元の著作権表示およびMIT Licenseの許諾表示を保持します。
-
-NicoPocket自身のライセンスおよび追加したコードの扱いについても、  
-フォーク元のMIT Licenseとの整合性を保った形で管理します。
-
-詳細はリポジトリ内の `LICENSE` を参照してください。
+同梱FFmpeg等の第三者資産には、それぞれのライセンスが適用されます。プロジェクトのMIT Licenseだけで第三者資産のライセンスを置き換えるものではありません。同梱バイナリには`--enable-gpl`・`--enable-nonfree`・`libfdk-aac`の構成が含まれます。第三者バイナリをMITのみとして扱わず、個人利用の既存基盤として維持します。確認結果は[PHASE10.md](PHASE10.md)に記録しています。

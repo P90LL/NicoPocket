@@ -27,14 +27,14 @@
     // These wrappers apply only while a NicoPocket request is active.
     const option = Option_setLoading;
     Option_setLoading = function (name) {
-        if (active && name === 'downFile_setting') return 'aac';
+        if (active && name === 'downFile_setting') return 'm4a';
         if (active && name === 'video_pattern') return active.videoId;
         if (active && name === 'video_hlssave' && (!localStorage.getItem(name) || localStorage.getItem(name) === 'undefined')) return '1';
         return option(name);
     };
     const makeName = NicoDownloaderClass.prototype.VideoDownloadNameMake;
     NicoDownloaderClass.prototype.VideoDownloadNameMake = function (...args) {
-        return active ? active.title + '.aac' : makeName.apply(this, args);
+        return active ? active.title + '.m4a' : makeName.apply(this, args);
     };
     const firstButton = NicoDownloaderClass.prototype.ButtonFirstMake;
     NicoDownloaderClass.prototype.ButtonFirstMake = function () {
@@ -141,8 +141,8 @@
         job.saving = true;
         try {
             const link = document.getElementById(VideoData.Video_DLlink.a2);
-            if (!link?.href.startsWith('blob:') || !link.download.endsWith('.aac')) {
-                throw new Error('AAC保存用リンクを生成できませんでした。');
+            if (!link?.href.startsWith('blob:') || !link.download.endsWith('.m4a')) {
+                throw new Error('M4A保存用リンクを生成できませんでした。');
             }
             const ready = await chrome.runtime.sendMessage({ kind: 'np:aac-save-ready', jobId: job.id, url: link.href });
             if (!ready?.ok) throw new Error('保存状態の監視を開始できませんでした。');
@@ -151,7 +151,7 @@
             new NicoDownloaderClass().DownloadLinkClick();
             void notify(job, 'saving');
             job.saveDeadline = setTimeout(() => failed(job, '保存の開始を確認できませんでした。保存ダイアログと動画ページを確認してください。'), 60000);
-        } catch (error) { failed(job, error.message || 'AACの保存開始に失敗しました。'); }
+        } catch (error) { failed(job, error.message || 'M4Aの保存開始に失敗しました。'); }
     }
     async function prepare(job) {
         const values = await chrome.storage.local.get(['video_hlssave', 'video_pattern', 'language_setting', 'debug', 'downFile_setting']);

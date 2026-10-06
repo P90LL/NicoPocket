@@ -82,10 +82,10 @@ function syncAACButton() {
     downloadButton.disabled = requestingAAC || Boolean(running) || !NicoPocketEditor.context;
     titleInput.disabled = Boolean(running);
     qualityInput.disabled = Boolean(running);
-    const labels = { starting: 'AAC取得を開始しています…', acquiring: '既存処理でAACを取得・生成しています…', saving: 'AACを保存しています…', complete: 'AACの保存が完了しました。' };
+    const labels = { starting: 'AAC取得を開始しています…', acquiring: '音声を取得し、M4Aを生成しています…', saving: 'M4Aを保存しています…', complete: 'M4Aの保存が完了しました。' };
     document.getElementById('save-status').textContent = aacState?.phase === 'error'
         ? aacState.error || '処理に失敗しました。再度実行できます。'
-        : labels[aacState?.phase] || 'AACとして保存します。音質選択・Artwork処理は未接続です。';
+        : labels[aacState?.phase] || 'M4Aとして保存します。音質選択・Artwork処理は未接続です。';
 }
 downloadButton.addEventListener('click', async () => {
     if (downloadButton.disabled || requestingAAC || !NicoPocketEditor.context) return;

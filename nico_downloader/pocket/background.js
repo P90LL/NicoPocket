@@ -132,7 +132,7 @@ chrome.downloads.onCreated.addListener(item => {
         await updateAAC(state.id, { downloadId: item.id, saveUrl: null });
         const records = await chrome.downloads.search({ id: item.id });
         if (records[0]?.state === 'complete') await updateAAC(state.id, { phase: 'complete' });
-        if (records[0]?.state === 'interrupted') await updateAAC(state.id, { phase: 'error', error: 'AACの保存が中断されました。再度実行できます。' });
+        if (records[0]?.state === 'interrupted') await updateAAC(state.id, { phase: 'error', error: 'M4Aの保存が中断されました。再度実行できます。' });
     })().catch(console.error);
 });
 chrome.downloads.onChanged.addListener(delta => {
@@ -142,7 +142,7 @@ chrome.downloads.onChanged.addListener(delta => {
         const state = stored['np:aacJob'];
         if (state?.downloadId !== delta.id) return;
         await updateAAC(state.id, delta.state.current === 'complete'
-            ? { phase: 'complete' } : { phase: 'error', error: 'AACの保存が中断されました。再度実行できます。' });
+            ? { phase: 'complete' } : { phase: 'error', error: 'M4Aの保存が中断されました。再度実行できます。' });
     })().catch(console.error);
 });
 chrome.tabs.onRemoved.addListener(tabId => {

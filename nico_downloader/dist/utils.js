@@ -48,6 +48,25 @@ const runFFmpeg_m3u8 = async (
     resolve = r;
   });
 
+  // NicoPocket M4A: copy the existing audio stream directly into MP4.
+  // User metadata is deliberately deferred to Phase 5.
+  if (mode === "m4a") {
+    NicoDownloader.SetVideFormatByExtension(mode);
+    NicoDownloader.FSOutputFileNameSet(Nicovideo);
+    const ffmpegArgs = [
+      "-allowed_extensions", "ALL", "-i", m3u8name,
+      "-map", "0:a:0", "-vn", "-c:a", "copy",
+      "-map_metadata", "-1", "-map_metadata:s:a", "-1",
+      "-map_chapters", "-1", "-f", "mp4",
+      NicoDownloader.FSOutputFileNameGet(),
+    ];
+    console.log(`FFmpegコマンド: ffmpeg ${ffmpegArgs.join(" ")}`);
+    ffmpeg(Core, ffmpegArgs);
+    // The existing print callback creates the Blob and removes the FS output.
+    await waitEnd;
+    return;
+  }
+
   //終了時にresolve
   try {
     //日本語が入っているとタグが変になるのでエンコード
@@ -168,6 +187,8 @@ function FiletypeToMimetype(filetype) {
       return "video/webm";
     case "aac":
       return "audio/aac";
+    case "m4a":
+      return "audio/mp4";
     default:
       return "video/mp4";
   }

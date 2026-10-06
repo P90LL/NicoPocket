@@ -12,7 +12,7 @@
 <div class="app-shell">
   <header class="titlebar">
     <div class="brand"><img src="./logo.svg" alt="" width="36" height="36" /><span><strong>NicoPocket</strong><small>にこぽけ</small></span></div>
-    <div class="titlebar-center"><span class="development-badge">開発中 · AAC保存</span></div>
+    <div class="titlebar-center"><span class="development-badge">開発中 · M4A保存</span></div>
     <button id="close-editor" class="secondary" type="button">閉じる</button>
   </header>
   <main>
@@ -23,7 +23,7 @@
         <dl class="video-details"><div><dt>動画ID</dt><dd id="video-id">—</dd></div><div><dt>投稿者</dt><dd id="video-uploader">—</dd></div></dl>
         <div id="draft-editor">
           <label for="draft-title">タイトル / ファイル名</label>
-          <div class="input-suffix"><input id="draft-title" type="text" maxlength="500" autocomplete="off" placeholder="タイトルを入力" /><span>.aac</span></div>
+          <div class="input-suffix"><input id="draft-title" type="text" maxlength="500" autocomplete="off" placeholder="タイトルを入力" /><span>.m4a</span></div>
           <div id="draft-options">
             <label for="audio-quality">音質</label>
             <select id="audio-quality" name="quality"><option value="standard" selected>標準音質</option><option value="high">高音質</option></select>
@@ -39,7 +39,7 @@
       </aside>
     </div>
     <div class="action-row"><button id="download" class="primary" type="button" aria-describedby="save-status" disabled>Download</button></div>
-    <p id="save-status" class="subtle" role="status">AACとして保存します。</p>
+    <p id="save-status" class="subtle" role="status">M4Aとして保存します。</p>
   </main>
 </div>
 </body>

@@ -107,3 +107,14 @@ main { width: min(1120px, 100%); padding: 40px clamp(22px, 5vw, 64px) 70px; }
 #artwork-dialog label { display: flex; flex-direction: row; justify-content: space-between; }
 #artwork-edit-status { margin-top: 12px; }
 #artwork-note { margin-bottom: 0; font-size: .86rem; }
+
+.original-title p { margin: 6px 0 22px; overflow-wrap: anywhere; }
+.metadata-summary { margin-top: 24px; border-top: 1px solid var(--line); padding-top: 18px; }
+.metadata-summary summary { cursor: pointer; font-weight: 600; }
+#metadata-preview { display: grid; gap: 8px; font-size: .86rem; }
+#metadata-preview div { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 12px; }
+#metadata-preview dt { color: var(--muted); }
+#metadata-preview dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+#download-progress { width: 100%; accent-color: var(--blue); margin-top: 18px; }
+#save-status[data-error="true"] { color: #b3261e; }
+[hidden] { display: none !important; }

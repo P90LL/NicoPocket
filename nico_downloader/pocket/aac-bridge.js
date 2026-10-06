@@ -20,12 +20,15 @@
         job.controller.abort();
         cleanupArtwork(job);
         job.artwork = null;
+        if (job.blobUrl) URL.revokeObjectURL(job.blobUrl);
         clearInterval(job.watch);
         clearTimeout(job.deadline);
         clearTimeout(job.saveDeadline);
         NicovideoDownloader__NowDownloading = false;
         NicovideoDownloader__LoadedVideoSMID = '-1';
-        document.getElementById(VideoData.Video_DLlink.a2)?.remove();
+        const staleLink = document.getElementById(VideoData.Video_DLlink.a2);
+        if (staleLink?.href.startsWith('blob:')) URL.revokeObjectURL(staleLink.href);
+        staleLink?.remove();
         if (report) void notify(job, phase, error);
         NicoPocketUI.placeButton();
     }
@@ -48,6 +51,26 @@
     const makeName = NicoDownloaderClass.prototype.VideoDownloadNameMake;
     NicoDownloaderClass.prototype.VideoDownloadNameMake = function (...args) {
         return active ? active.title + '.m4a' : makeName.apply(this, args);
+    };
+    const legacySave = NicoDownloaderClass.prototype.DownloadLinkClick;
+    NicoDownloaderClass.prototype.DownloadLinkClick = function (...args) {
+        // VideoDown and the page-wide click handler must never click a pending legacy link.
+        if (active || this._nicoPocketJob) return false;
+        return legacySave.apply(this, args);
+    };
+    const buttonText = NicoDownloaderClass.prototype.ButtonTextWrite;
+    NicoDownloaderClass.prototype.ButtonTextWrite = function (text) {
+        const job = this._nicoPocketJob || active;
+        if (!job) return buttonText.call(this, text);
+        if (!sameSource(job) || job.saving) return;
+        const match = String(text).match(/([0-9]+(?:\.[0-9]+)?)%/);
+        if (match) {
+            const progress = Math.min(100, Math.max(0, Math.floor(Number(match[1]))));
+            if (job.progress !== progress) {
+                job.progress = progress;
+                void chrome.runtime.sendMessage({ kind: 'np:aac-event', jobId: job.id, phase: 'acquiring', progress }).catch(() => {});
+            }
+        }
     };
     const firstButton = NicoDownloaderClass.prototype.ButtonFirstMake;
     NicoDownloaderClass.prototype.ButtonFirstMake = function () {
@@ -112,6 +135,7 @@
         core.ccall = function (...args) {
             guard(job);
             job.executing = args[0] === 'main';
+            if (job.executing) void notify(job, 'processing');
             try {
                 const result = call.apply(this, args);
                 if (args[0] === 'main' && typeof result === 'number' && result !== 0) {
@@ -213,13 +237,14 @@
             if (!link?.href.startsWith('blob:') || !link.download.endsWith('.m4a')) {
                 throw new Error('M4A保存用リンクを生成できませんでした。');
             }
+            job.blobUrl = link.href;
+            job.saveDeadline = setTimeout(() => failed(job, 'Chrome側で保存が完了していません。許可・保存先を確認して再試行してください。'), 60000);
             const ready = await chrome.runtime.sendMessage({ kind: 'np:aac-save-ready', jobId: job.id, url: link.href });
-            if (!ready?.ok) throw new Error('保存状態の監視を開始できませんでした。');
+            if (!ready?.ok) throw new Error(ready?.error || 'Chrome側で保存を開始できませんでした。許可や保存先を確認して再試行してください。');
             guard(job);
-            // Reuse the upstream final link click and cleanup.
-            new NicoDownloaderClass().DownloadLinkClick();
-            void notify(job, 'saving');
-            job.saveDeadline = setTimeout(() => failed(job, '保存の開始を確認できませんでした。保存ダイアログと動画ページを確認してください。'), 60000);
+            // Execute exactly this validated M4A link, never the generic legacy handler.
+            link.click();
+            link.remove();
         } catch (error) { failed(job, error.message || 'M4Aの保存開始に失敗しました。'); }
     }
     async function prepare(job) {
@@ -242,7 +267,9 @@
         guard(job);
         last_save_sm = '';
         NicovideoDownloader__LoadedVideoSMID = '-1';
-        document.getElementById(VideoData.Video_DLlink.a2)?.remove();
+        const staleLink = document.getElementById(VideoData.Video_DLlink.a2);
+        if (staleLink?.href.startsWith('blob:')) URL.revokeObjectURL(staleLink.href);
+        staleLink?.remove();
         const result = await VideoDown({ isCurrent: () => sameSource(job) });
         if (result === false) throw new Error('既存AAC取得処理を開始できませんでした。');
     }
@@ -250,6 +277,7 @@
         if (sender.id !== chrome.runtime.id || sender.tab) return;
         if (message?.kind === 'np:aac-status') {
             if (active?.id === message.jobId) {
+                // Once Chrome starts the download, its terminal events own completion.
                 if (message.downloadId != null) clearTimeout(active.saveDeadline);
                 if (['complete', 'error'].includes(message.phase)) stop(active, message.phase, message.error, false);
             }

@@ -28,8 +28,9 @@ const NicoPocketArtwork = (() => {
         pill.textContent = error ? '読み込み失敗' : loading ? '読み込み中' : state?.edited ? '編集済み' : bitmap ? '元画像' : '未設定';
         empty.textContent = error || (loading ? 'サムネイルを読み込んでいます…' : 'サムネイル未取得');
         note.textContent = state?.edited ? '正方形Artworkの編集結果です。保存時にM4Aへ埋め込みます。' : '1:1の正方形に編集できます。未編集時はArtworkなしで保存します。';
-        edit.disabled = !state?.thumbnailUrl || loading || exporting;
-        original.disabled = !state?.edited || exporting;
+        edit.disabled = !state?.thumbnailUrl || loading || exporting || Boolean(editor?.downloading);
+        original.disabled = !state?.edited || exporting || Boolean(editor?.downloading);
+        window.dispatchEvent(new Event('np:artwork-change'));
     }
     async function load(target) {
         const version = ++generation;
@@ -155,6 +156,7 @@ const NicoPocketArtwork = (() => {
             }
         }
     });
+    window.addEventListener('np:download-state', () => summary());
     window.addEventListener('pagehide', release);
     return { setContext };
 })();

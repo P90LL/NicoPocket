@@ -75,6 +75,9 @@ async function applyAACUpdate(id, changes) {
     const state = stored['np:aacJob'];
     if (!state || state.id !== id || terminalAAC(state)) return;
     const next = { ...state, ...changes };
+    if (next.phase === 'error' && state.downloadId != null) {
+        try { await chrome.downloads.cancel(state.downloadId); } catch { /* Already finished. */ }
+    }
     // Session storage is not exposed to content scripts. Release their lock explicitly.
     if (terminalAAC(next) || changes.downloadId != null) {
         try { await chrome.tabs.sendMessage(state.sourceTabId, { kind: 'np:aac-status',
@@ -84,6 +87,16 @@ async function applyAACUpdate(id, changes) {
 }
 chrome.runtime.onMessage.addListener((message, sender, respond) => {
     if (sender.id !== chrome.runtime.id) return;
+    if (message?.kind === 'np:aac-cancel' && sender.url === chrome.runtime.getURL('pocket/window.html')) {
+        void chrome.storage.session.get('np:aacJob').then(async stored => {
+            const state = stored['np:aacJob'];
+            if (state && state.id === message.jobId && !terminalAAC(state)) {
+                await updateAAC(state.id, { phase: 'error', error: '保存をキャンセルしました。再試行できます。' });
+            }
+            respond({ ok: true });
+        }).catch(() => respond({ ok: false }));
+        return true;
+    }
     if (message?.kind === 'np:aac-start') {
         if (sender.url !== chrome.runtime.getURL('pocket/window.html')) return;
         if (startingAAC) { respond({ ok: false, error: '処理中です。' }); return; }
@@ -132,14 +145,19 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
         if (!state || state.id !== message.jobId || state.sourceTabId !== sender.tab.id || terminalAAC(state)) return { ok: false };
         if (message.kind === 'np:aac-save-ready') {
             if (typeof message.url !== 'string' || !message.url.startsWith('blob:https://www.nicovideo.jp/')) return { ok: false };
+            if (state.saveReadyAt) return { ok: false, error: '保存要求は既に開始済みです。' };
             await updateAAC(state.id, { phase: 'saving', saveUrl: message.url, saveReadyAt: Date.now() });
-        } else if (['acquiring', 'saving', 'error'].includes(message.phase)) {
+            const owners = (await chrome.storage.session.get('np:saveTargets'))['np:saveTargets'] || [];
+            await chrome.storage.session.set({ 'np:saveTargets': [...owners, { id: state.id, url: message.url }].slice(-20) });
+            return { ok: true };
+        } else if (['acquiring', 'processing', 'saving', 'error'].includes(message.phase)) {
+            if (state.phase === 'saving' && ['acquiring', 'processing'].includes(message.phase)) return { ok: true };
             const selection = message.audioSelection;
             const audioSelection = selection ? { requestedQuality: state.requestedQuality,
                 selectedAudioId: typeof selection.selectedAudioId === 'string' && /^audio-[a-zA-Z0-9.-]+$/.test(selection.selectedAudioId) ? selection.selectedAudioId.slice(0, 100) : null,
                 selectedBitrate: Number.isFinite(selection.selectedBitrate) && selection.selectedBitrate > 0 ? selection.selectedBitrate : null,
                 fallback: selection.fallback === true } : state.audioSelection;
-            await updateAAC(state.id, { audioSelection, phase: message.phase, error: typeof message.error === 'string' ? message.error.slice(0, 500) : undefined });
+            await updateAAC(state.id, { audioSelection, progress: Number.isFinite(message.progress) ? Math.min(100, Math.max(0, message.progress)) : state.progress, phase: message.phase, error: typeof message.error === 'string' ? message.error.slice(0, 500) : undefined });
         }
         return { ok: true };
     })().then(respond, () => respond({ ok: false }));
@@ -147,23 +165,32 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
 });
 chrome.downloads.onCreated.addListener(item => {
     void (async () => {
-        const stored = await chrome.storage.session.get('np:aacJob');
+        const stored = await chrome.storage.session.get(['np:aacJob', 'np:saveTargets']);
         const state = stored['np:aacJob'];
+        const owner = (stored['np:saveTargets'] || []).find(target => [item.url, item.finalUrl].includes(target.url));
+        if (owner && (!state || owner.id !== state.id || state.phase === 'error' || (terminalAAC(state) && state.downloadId !== item.id))) {
+            await chrome.downloads.cancel(item.id).catch(() => {}); return;
+        }
         if (!state || terminalAAC(state) || !state.saveUrl || ![item.url, item.finalUrl].includes(state.saveUrl)) return;
         await updateAAC(state.id, { downloadId: item.id, saveUrl: null });
         const records = await chrome.downloads.search({ id: item.id });
         if (records[0]?.state === 'complete') await updateAAC(state.id, { phase: 'complete' });
-        if (records[0]?.state === 'interrupted') await updateAAC(state.id, { phase: 'error', error: 'M4Aの保存が中断されました。再度実行できます。' });
+        if (records[0]?.state === 'interrupted') await updateAAC(state.id, { phase: 'error', error: 'Chrome側でM4Aの保存が中断されました。許可・保存先を確認して再試行してください。' });
     })().catch(console.error);
 });
 chrome.downloads.onChanged.addListener(delta => {
-    if (!['complete', 'interrupted'].includes(delta.state?.current)) return;
+    if (!['complete', 'interrupted'].includes(delta.state?.current) && delta.paused?.current == null) return;
     void (async () => {
         const stored = await chrome.storage.session.get('np:aacJob');
         const state = stored['np:aacJob'];
         if (state?.downloadId !== delta.id) return;
+        if (delta.paused?.current != null && !['complete', 'interrupted'].includes(delta.state?.current)) {
+            await updateAAC(state.id, delta.paused.current
+                ? { phase: 'error', error: 'Chrome側でダウンロードが保留されています。許可・保存先を確認して再試行してください。' }
+                : { paused: false }); return;
+        }
         await updateAAC(state.id, delta.state.current === 'complete'
-            ? { phase: 'complete' } : { phase: 'error', error: 'M4Aの保存が中断されました。再度実行できます。' });
+            ? { phase: 'complete' } : { phase: 'error', error: 'Chrome側でM4Aの保存が中断されました。許可・保存先を確認して再試行してください。' });
     })().catch(console.error);
 });
 chrome.tabs.onRemoved.addListener(tabId => {

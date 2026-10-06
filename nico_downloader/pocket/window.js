@@ -26,6 +26,7 @@ function render(context) {
         NicoPocketEditor.title = titleInput.value;
         NicoPocketEditor.quality = 'standard';
     }
+    document.getElementById('original-title').textContent = context.originalTitle || '取得できませんでした';
     document.getElementById('video-id').textContent = context.videoId;
     document.getElementById('video-uploader').textContent = context.uploader || '取得できませんでした';
     document.getElementById('video-status').textContent = context.incomplete
@@ -36,7 +37,7 @@ function render(context) {
         + (count ? ` 利用可能な音声品質情報: ${count}件。` : ' 音声品質情報は未取得です。');
     NicoPocketArtwork.setContext(context, NicoPocketEditor);
 }
-titleInput.addEventListener('input', () => { NicoPocketEditor.title = titleInput.value; });
+titleInput.addEventListener('input', () => { NicoPocketEditor.title = titleInput.value; renderMetadata(); });
 qualityInput.addEventListener('change', () => { NicoPocketEditor.quality = qualityInput.value; });
 document.getElementById('close-editor').addEventListener('click', () => window.close());
 async function refresh() {
@@ -60,9 +61,19 @@ void refresh();
 function syncAACButton() {
     const running = aacState && !['complete', 'error'].includes(aacState.phase);
     downloadButton.disabled = requestingAAC || Boolean(running) || !NicoPocketEditor.context;
-    titleInput.disabled = Boolean(running);
-    qualityInput.disabled = Boolean(running);
-    const labels = { starting: 'AAC取得を開始しています…', acquiring: '音声を取得し、M4Aを生成しています…', saving: 'M4Aを保存しています…', complete: 'M4Aの保存が完了しました。' };
+    titleInput.disabled = requestingAAC || Boolean(running);
+    qualityInput.disabled = requestingAAC || Boolean(running);
+    NicoPocketEditor.downloading = requestingAAC || Boolean(running);
+    window.dispatchEvent(new Event('np:download-state'));
+    document.getElementById('cancel-download').hidden = !running;
+    downloadButton.textContent = aacState?.phase === 'error' ? '再試行' : 'Download';
+    const progress = document.getElementById('download-progress');
+    progress.hidden = !running;
+    if (aacState?.phase === 'acquiring' && Number.isFinite(aacState.progress)) progress.value = aacState.progress;
+    else progress.removeAttribute('value');
+    const labels = { starting: 'AAC取得を開始しています…', acquiring: '音声を取得しています…' + (Number.isFinite(aacState?.progress) ? ` ${aacState.progress}%` : ''), processing: 'M4Aを生成しています…（Metadata・Artworkを設定）', saving: aacState?.paused ? 'Chrome側でダウンロードが保留されています。許可・保存先を確認してください。キャンセル後に再試行できます。' : 'M4Aを保存しています…', complete: 'M4Aの保存が完了しました。' };
+    document.getElementById('save-status').dataset.error = String(aacState?.phase === 'error');
+    renderMetadata();
     document.getElementById('save-status').textContent = aacState?.phase === 'error'
         ? aacState.error || '処理に失敗しました。再度実行できます。'
         : labels[aacState?.phase] || '選択した音質を再エンコードせずM4Aとして保存します。';
@@ -102,4 +113,23 @@ downloadButton.addEventListener('click', async () => {
         requestingAAC = false;
         syncAACButton();
     }
+});
+
+function renderMetadata() {
+    const target = document.getElementById('metadata-preview');
+    const context = NicoPocketEditor.context;
+    target.replaceChildren();
+    if (!context) return;
+    const tags = NicoPocketMetadata.build({ ...context, title: NicoPocketTitle.normalize(NicoPocketEditor.title, context.videoId) });
+    const labels = { title: 'Title', artist: 'Artist', episode_id: 'Video ID', comment: 'Video URL', genre: 'Genre', album: 'Album', album_artist: 'Album Artist', date: 'Date', creation_time: 'Creation Time' };
+    const values = { ...tags, artwork: NicoPocketEditor.artwork?.blob ? '768 × 768 JPEG' : 'なし（未編集・取得失敗時）' };
+    for (const [key, value] of Object.entries(values)) {
+        const row = document.createElement('div'), term = document.createElement('dt'), description = document.createElement('dd');
+        term.textContent = labels[key] || 'Artwork'; description.textContent = value;
+        row.append(term, description); target.append(row);
+    }
+}
+window.addEventListener('np:artwork-change', renderMetadata);
+document.getElementById('cancel-download').addEventListener('click', () => {
+    if (aacState?.id) void chrome.runtime.sendMessage({ kind: 'np:aac-cancel', jobId: aacState.id }).catch(() => {});
 });

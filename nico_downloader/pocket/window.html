@@ -6,6 +6,7 @@
   <title>NicoPocket</title>
   <link rel="stylesheet" href="./window.css" />
   <script src="./title.js" defer></script>
+  <script src="./metadata.js" defer></script>
   <script src="./artwork.js" defer></script>
   <script src="./window.js" defer></script>
 </head>
@@ -22,8 +23,9 @@
       <section class="card review-main" aria-labelledby="title-heading">
         <div class="section-heading"><div><h2 id="title-heading">保存内容</h2><p id="video-status" role="status">動画情報を読み込んでいます…</p></div></div>
         <dl class="video-details"><div><dt>動画ID</dt><dd id="video-id">—</dd></div><div><dt>投稿者</dt><dd id="video-uploader">—</dd></div></dl>
+        <div class="original-title"><span class="subtle">元タイトル</span><p id="original-title">—</p></div>
         <div id="draft-editor">
-          <label for="draft-title">タイトル / ファイル名</label>
+          <label for="draft-title">保存タイトル / ファイル名</label>
           <div class="input-suffix"><input id="draft-title" type="text" maxlength="500" autocomplete="off" placeholder="タイトルを入力" /><span>.m4a</span></div>
           <div id="draft-options">
             <label for="audio-quality">音質</label>
@@ -31,6 +33,7 @@
             <p id="audio-info" class="subtle">標準音質は192 kbps基準。高音質は取得可能な元音源を使用します。</p>
           </div>
         </div>
+        <details class="metadata-summary"><summary>保存するMetadata</summary><dl id="metadata-preview"></dl></details>
       </section>
       <aside class="card cover-summary" aria-labelledby="artwork-heading">
         <div class="section-heading"><h2 id="artwork-heading">Artwork</h2><span id="artwork-state" class="status-pill">未設定</span></div>
@@ -40,7 +43,8 @@
         <button id="artwork-original" class="secondary full" type="button" disabled>元画像へ戻す</button>
       </aside>
     </div>
-    <div class="action-row"><button id="download" class="primary" type="button" aria-describedby="save-status" disabled>Download</button></div>
+    <div class="action-row"><button id="cancel-download" class="secondary" type="button" hidden>キャンセル</button><button id="download" class="primary" type="button" aria-describedby="save-status" disabled>Download</button></div>
+    <progress id="download-progress" max="100" hidden aria-label="ダウンロード進捗"></progress>
     <p id="save-status" class="subtle" role="status">M4Aとして保存します。</p>
   </main>
 </div>

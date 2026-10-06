@@ -54,16 +54,7 @@ const runFFmpeg_m3u8 = async (
     NicoDownloader.FSOutputFileNameSet(Nicovideo);
     // Reuse upstream tag names; values come from the editor's source context.
     const info = NicoDownloader._nicoPocketMetadata || {};
-    const tags = {
-      title: info.title, artist: info.uploader, episode_id: info.videoId,
-      comment: info.sourceUrl, genre: info.genre, album: info.series,
-      album_artist: info.series ? info.uploader : undefined,
-    };
-    if (typeof info.registeredAt === "string" && info.registeredAt.trim()
-        && Number.isFinite(Date.parse(info.registeredAt))) {
-      tags.date = info.registeredAt;
-      tags.creation_time = info.registeredAt;
-    }
+    const tags = NicoPocketMetadata.build(info);
     const metadataArgs = Object.entries(tags).flatMap(([key, value]) => {
       if (typeof value !== "string") return [];
       const text = value.replace(/[\u0000-\u001f\u007f]/g, " ").trim();

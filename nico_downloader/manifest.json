@@ -49,6 +49,7 @@
                 "dist/utils.js",
                 "func/nicojson.js",
                 "func/ndl.js",
+                "pocket/metadata.js",
                 "pocket/audio-quality.js",
                 "pocket/video-info.js",
                 "pocket/aac-bridge.js"

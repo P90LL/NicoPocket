@@ -32,8 +32,8 @@ function render(context) {
         ? '一部の動画情報を取得できませんでした。動画ページから再度開いてください。'
         : '現在の動画情報を読み込みました。';
     const count = context.audioQualities.filter(audio => audio.available).length;
-    document.getElementById('audio-info').textContent = '標準音質は192 kbps基準。高音質は取得可能な元音源を使用します。'
-        + (count ? ` 利用可能な音声品質情報: ${count}件（選択処理は準備中）。` : ' 音声品質情報は未取得です。');
+    document.getElementById('audio-info').textContent = '標準音質は192 kbps以下の最高品質、高音質は最高品質を使用します。192 kbps以下がない場合も元音源のまま保存します。'
+        + (count ? ` 利用可能な音声品質情報: ${count}件。` : ' 音声品質情報は未取得です。');
     NicoPocketArtwork.setContext(context, NicoPocketEditor);
 }
 titleInput.addEventListener('input', () => { NicoPocketEditor.title = titleInput.value; });
@@ -65,7 +65,7 @@ function syncAACButton() {
     const labels = { starting: 'AAC取得を開始しています…', acquiring: '音声を取得し、M4Aを生成しています…', saving: 'M4Aを保存しています…', complete: 'M4Aの保存が完了しました。' };
     document.getElementById('save-status').textContent = aacState?.phase === 'error'
         ? aacState.error || '処理に失敗しました。再度実行できます。'
-        : labels[aacState?.phase] || 'M4Aとして保存します。音質選択は未接続です。';
+        : labels[aacState?.phase] || '選択した音質を再エンコードせずM4Aとして保存します。';
 }
 async function artworkForDownload(context) {
     const artwork = NicoPocketEditor.artwork;
@@ -87,12 +87,13 @@ downloadButton.addEventListener('click', async () => {
     syncAACButton();
     try {
         const title = NicoPocketTitle.normalize(NicoPocketEditor.title, context.videoId);
+        const quality = NicoPocketEditor.quality === 'high' ? 'high' : 'standard';
         const artwork = await artworkForDownload(context);
         const current = NicoPocketEditor.context;
         if (!current || current.videoId !== context.videoId || current.sourceTabId !== context.sourceTabId
             || current.sourceUrl !== context.sourceUrl) throw new Error('動画が切り替わりました。開き直してください。');
         const reply = await chrome.runtime.sendMessage({ kind: 'np:aac-start',
-            sourceTabId: context.sourceTabId, sourceUrl: context.sourceUrl, videoId: context.videoId, title, artwork });
+            sourceTabId: context.sourceTabId, sourceUrl: context.sourceUrl, videoId: context.videoId, title, artwork, quality });
         if (!reply?.ok) throw new Error(reply?.error || 'AAC取得を開始できませんでした。');
         await refresh();
     } catch (error) {

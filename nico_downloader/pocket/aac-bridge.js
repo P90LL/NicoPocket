@@ -159,12 +159,44 @@
         }
         return task;
     };
+    const chooseAudio = NicoDownloaderClass.prototype.M3u8ToAudioAndVideoUrlSet;
+    NicoDownloaderClass.prototype.M3u8ToAudioAndVideoUrlSet = function (...args) {
+        const result = chooseAudio.apply(this, args);
+        const job = this._nicoPocketJob;
+        if (!job || !result) return result;
+        guard(job);
+        const selected = NicoPocketAudioQuality.select(this.M3u8.FirstBody_json['EXT-X-MEDIA'] || [],
+            job.audioQualities, job.requestedQuality);
+        let applied = false;
+        if (selected) {
+            const lines = this.M3u8.FirstBody.split(/\r?\n/);
+            const isAudio = line => /^#EXT-X-MEDIA:/.test(line) && /(?:[:,])TYPE=AUDIO(?:,|$)/.test(line);
+            const chosen = lines.find(line => isAudio(line) && line.match(/(?:[:,])URI="([^"]+)"/)?.[1] === selected.item.URI);
+            const group = chosen?.match(/(?:[:,])GROUP-ID="([^"]+)"/)?.[1];
+            if (group && lines.some(line => /^#EXT-X-STREAM-INF:/.test(line) && /,AUDIO="[^"]+"/.test(line))) {
+                // Keep the selected rendition first/only for FFmpeg's existing -map 0:a:0.
+                const body = lines.filter(line => !isAudio(line) || line === chosen)
+                    .map(line => /^#EXT-X-STREAM-INF:/.test(line)
+                        ? line.replace(/,AUDIO="[^"]+"/, ',AUDIO="' + group + '"') : line).join('\n');
+                this.SetM3u8('FirstBody', body);
+                this.SetM3u8('FirstBody_json', this.Parsem3u8(body));
+                this.SetM3u8('AudioM3u8URL', selected.item.URI);
+                applied = true;
+            }
+        }
+        void chrome.runtime.sendMessage({ kind: 'np:aac-event', jobId: job.id, phase: 'acquiring',
+            audioSelection: { requestedQuality: job.requestedQuality, selectedAudioId: applied ? selected.id : null,
+                selectedBitrate: applied ? selected.bitrate : null, fallback: !applied } }).catch(() => {});
+        return result;
+    };
     const movie = MovieDownload_domand;
     MovieDownload_domand = function (...args) {
         const job = active;
         if (job) {
             guard(job);
             args[1]._nicoPocketJob = job;
+            const audios = args[0].GetWatchData()?.media?.domand?.audios;
+            if (Array.isArray(audios) && audios.length) job.audioQualities = audios.map(audio => ({ id: audio.id, available: audio.isAvailable === true }));
             args[1]._nicoPocketMetadata = { ...job.metadata, title: job.title, videoId: job.videoId };
         }
         const task = movie(...args);
@@ -228,6 +260,8 @@
             respond({ ok: false, error: '処理中、または取得元動画が切り替わっています。' }); return;
         }
         const job = { controller: new AbortController(), id: message.jobId, videoId: message.videoId, title: NicoPocketTitle.normalize(message.title, message.videoId), metadata: message.metadata || {}, artwork: Array.isArray(message.artwork) ? message.artwork : null };
+        job.requestedQuality = message.requestedQuality === 'high' ? 'high' : 'standard';
+        job.audioQualities = Array.isArray(message.audioQualities) ? message.audioQualities : [];
         active = job;
         job.watch = setInterval(() => {
             if (!sameSource(job)) failed(job, '取得元動画が切り替わりました。現在の動画から開き直してください。');

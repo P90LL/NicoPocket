@@ -105,6 +105,7 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
                 && bytes[0] === 255 && bytes[1] === 216 && bytes.at(-2) === 255 && bytes.at(-1) === 217
                 ? bytes : null;
             const state = { id: crypto.randomUUID(), phase: 'starting', videoId: context.videoId,
+                requestedQuality: message.quality === 'high' ? 'high' : 'standard',
                 sourceTabId: context.sourceTabId, title: NicoPocketTitle.normalize(message.title, context.videoId), startedAt: Date.now(),
                 metadata: { uploader: context.uploader, sourceUrl: context.sourceUrl,
                     genre: context.genre, series: context.series, registeredAt: context.registeredAt } };
@@ -112,7 +113,7 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
             try {
                 // Receiver verifies the current watch ID again immediately before execution.
                 const reply = await chrome.tabs.sendMessage(context.sourceTabId, {
-                    kind: 'np:aac-run', jobId: state.id, videoId: context.videoId, title: state.title, metadata: state.metadata, artwork
+                    kind: 'np:aac-run', jobId: state.id, videoId: context.videoId, title: state.title, metadata: state.metadata, artwork, requestedQuality: state.requestedQuality, audioQualities: context.audioQualities
                 }, { frameId: 0 });
                 if (!reply?.ok) throw new Error(reply?.error || '取得元タブでAAC処理を開始できませんでした。');
                 return { ok: true, jobId: state.id };
@@ -133,7 +134,12 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
             if (typeof message.url !== 'string' || !message.url.startsWith('blob:https://www.nicovideo.jp/')) return { ok: false };
             await updateAAC(state.id, { phase: 'saving', saveUrl: message.url, saveReadyAt: Date.now() });
         } else if (['acquiring', 'saving', 'error'].includes(message.phase)) {
-            await updateAAC(state.id, { phase: message.phase, error: typeof message.error === 'string' ? message.error.slice(0, 500) : undefined });
+            const selection = message.audioSelection;
+            const audioSelection = selection ? { requestedQuality: state.requestedQuality,
+                selectedAudioId: typeof selection.selectedAudioId === 'string' && /^audio-[a-zA-Z0-9.-]+$/.test(selection.selectedAudioId) ? selection.selectedAudioId.slice(0, 100) : null,
+                selectedBitrate: Number.isFinite(selection.selectedBitrate) && selection.selectedBitrate > 0 ? selection.selectedBitrate : null,
+                fallback: selection.fallback === true } : state.audioSelection;
+            await updateAAC(state.id, { audioSelection, phase: message.phase, error: typeof message.error === 'string' ? message.error.slice(0, 500) : undefined });
         }
         return { ok: true };
     })().then(respond, () => respond({ ok: false }));

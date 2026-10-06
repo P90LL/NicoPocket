@@ -228,7 +228,7 @@ chrome.downloads.onCreated.addListener(item => {
         const records = await chrome.downloads.search({ id: item.id });
         if (records[0]?.state === 'complete') await updateAAC(state.id, { phase: 'complete' });
         if (records[0]?.state === 'interrupted') await updateAAC(state.id, { phase: 'error', error: 'Chrome側でM4Aの保存が中断されました。許可・保存先を確認して再試行してください。' });
-    })().catch(console.error);
+    })().catch(() => console.error('NicoPocket: 保存状態の更新に失敗しました。'));
 });
 chrome.downloads.onChanged.addListener(delta => {
     if (!['complete', 'interrupted'].includes(delta.state?.current) && delta.paused?.current == null) return;
@@ -243,13 +243,13 @@ chrome.downloads.onChanged.addListener(delta => {
         }
         await updateAAC(state.id, delta.state.current === 'complete'
             ? { phase: 'complete' } : { phase: 'error', error: 'Chrome側でM4Aの保存が中断されました。許可・保存先を確認して再試行してください。' });
-    })().catch(console.error);
+    })().catch(() => console.error('NicoPocket: 保存状態の更新に失敗しました。'));
 });
 chrome.tabs.onRemoved.addListener(tabId => {
     void chrome.storage.session.get('np:aacJob').then(stored => {
         const state = stored['np:aacJob'];
         if (state?.sourceTabId === tabId) return updateAAC(state.id, { phase: 'error', error: '取得元タブが閉じられました。' });
-    }).catch(console.error);
+    }).catch(() => console.error('NicoPocket: 保存状態の更新に失敗しました。'));
 });
 
 // A crop dialog also blocks its source video tab; close/window removal restores that tab.

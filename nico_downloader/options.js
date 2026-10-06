@@ -119,13 +119,5 @@ function isNullOrUndefined(o) {
 }
 
 
-function DebugPrint(text) {
-    if (setOption("debug") === "1") {
-        if (typeof text === "object") {
-            console.log(JSON.stringify(text));
-        } else {
-            console.log("debug:" + text);
-        }
-        
-    }
-}
+// Keep upstream calls compatible without exposing watch data or media URLs.
+function DebugPrint() {}

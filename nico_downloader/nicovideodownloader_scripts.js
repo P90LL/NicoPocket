@@ -115,7 +115,7 @@ try {
             try {
                 NicoPocketUI.placeButton();
             } catch (e) {
-                console.log(e);
+                console.error('NicoPocket: 起動ボタンの配置に失敗しました。');
             }
         } else {
             // 1回目は実行しない
@@ -123,7 +123,7 @@ try {
         }
     }, 2000);
 } catch (error) {
-    console.log(e);
+    console.error('NicoPocket: 起動ボタンの配置に失敗しました。');
 }
 
 //ページ表示時発火処理

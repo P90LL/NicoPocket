@@ -209,7 +209,7 @@ async function DownEncoder(NicoDownloader, m3u8s, Nicovideo) {
           resolve(filename);
         }
       ).catch(error => {
-        console.error("音声セグメント取得エラー", error);
+        console.error("音声セグメント取得エラー");
         reject(error);
       });
     });
@@ -230,7 +230,7 @@ async function DownEncoder(NicoDownloader, m3u8s, Nicovideo) {
         // 少し待機してメモリを安定させる
         await new Promise(resolve => setTimeout(resolve, 100));
       } catch (error) {
-        console.error("バッチダウンロードエラー:", error);
+        console.error("バッチダウンロードエラー");
         throw error;
       }
     }
@@ -287,7 +287,7 @@ async function Downloadblob(url, NicoDownloader) {
     
     return blob;
   } catch (error) {
-    console.error("Blob取得エラー", error);
+    console.error("Blob取得エラー");
     throw error;
   }
 }
@@ -312,7 +312,7 @@ async function DownloadUint8Array(url, NicoDownloader) {
     
     return byte;
   } catch (error) {
-    console.error("音声データ取得エラー", error);
+    console.error("音声データ取得エラー");
     throw error;
   }
 }
@@ -421,7 +421,7 @@ function parseFFmpegProgress(output, NicoDownloader) {
   if (output.includes("Array buffer allocation failed") || 
       output.includes("RangeError") || 
       output.includes("out of memory")) {
-    console.error("メモリ不足エラーが検出されました:", output);
+    console.error("メモリ不足エラーが検出されました");
     NicoDownloader.ButtonTextWrite("メモリ不足エラー");
     return;
   }

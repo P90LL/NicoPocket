@@ -269,7 +269,7 @@
             } catch (error) {
                 // Emscripten may signal successful process exit by throwing ExitStatus(0).
                 if (error?.status === 0 && job.saving) return 0;
-                console.error('NicoPocket FFmpeg', error);
+                console.error('NicoPocket: FFmpeg処理に失敗しました。');
                 failed(job, 'FFmpeg処理に失敗しました。動画ページのログを確認してください。');
                 throw error;
             } finally {
@@ -434,7 +434,7 @@
         if (event.reason?.nicoPocketJobId && event.reason.nicoPocketJobId !== active?.id) return;
         if (active) {
             failed(active, '既存の取得処理でエラーが発生しました。動画ページのログを確認してください。');
-            console.error('NicoPocket AAC', event.reason);
+            console.error('NicoPocket: 音声取得に失敗しました。');
             event.preventDefault();
         }
     });

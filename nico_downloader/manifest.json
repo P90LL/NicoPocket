@@ -12,6 +12,10 @@
         "storage",
         "downloads"
     ],
+    "host_permissions": [
+        "https://nicovideo.cdn.nimg.jp/*",
+        "https://tn.smilevideo.jp/*"
+    ],
     "web_accessible_resources": [
         {
             "matches": [

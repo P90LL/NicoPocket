@@ -6,6 +6,7 @@
   <title>NicoPocket</title>
   <link rel="stylesheet" href="./window.css" />
   <script src="./title.js" defer></script>
+  <script src="./artwork.js" defer></script>
   <script src="./window.js" defer></script>
 </head>
 <body>
@@ -34,13 +35,27 @@
       <aside class="card cover-summary" aria-labelledby="artwork-heading">
         <div class="section-heading"><h2 id="artwork-heading">Artwork</h2><span id="artwork-state" class="status-pill">未設定</span></div>
         <div class="cover-preview"><img id="artwork-image" alt="現在の動画のサムネイル" referrerpolicy="no-referrer" hidden /><span id="artwork-empty">サムネイル未取得</span></div>
-        <p>元のサムネイルを表示しています。トリミングは準備中です。</p>
-        <button class="secondary full" type="button" disabled>Artworkを編集（準備中）</button>
+        <p id="artwork-note">元のサムネイルです。1:1の正方形に編集できます。</p>
+        <button id="artwork-edit" class="secondary full" type="button" disabled>Artworkを編集</button>
+        <button id="artwork-original" class="secondary full" type="button" disabled>元画像へ戻す</button>
       </aside>
     </div>
     <div class="action-row"><button id="download" class="primary" type="button" aria-describedby="save-status" disabled>Download</button></div>
     <p id="save-status" class="subtle" role="status">M4Aとして保存します。</p>
   </main>
 </div>
+<dialog id="artwork-dialog" aria-labelledby="artwork-dialog-title">
+  <h2 id="artwork-dialog-title">Artworkを編集</h2>
+  <p class="subtle">固定1:1 · 画像をドラッグして位置を調整</p>
+  <canvas id="artwork-canvas" width="768" height="768" tabindex="0" aria-label="正方形Artworkプレビュー。ドラッグまたは矢印キーで位置を調整"></canvas>
+  <label for="artwork-zoom">ズーム <output id="artwork-zoom-value" for="artwork-zoom">100%</output></label>
+  <input id="artwork-zoom" type="range" min="1" max="4" step="0.01" value="1" />
+  <p id="artwork-edit-status" class="subtle" role="status"></p>
+  <div class="action-row">
+    <button id="artwork-reset" class="secondary" type="button">リセット</button>
+    <button id="artwork-cancel" class="secondary" type="button">キャンセル</button>
+    <button id="artwork-apply" class="primary" type="button">適用</button>
+  </div>
+</dialog>
 </body>
 </html>

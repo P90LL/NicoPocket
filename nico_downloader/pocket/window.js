@@ -1,10 +1,7 @@
 // Phase 3 can read this state and reuse NicoPocketTitle.normalize at save time.
-const NicoPocketEditor = { context: null, title: '', quality: 'standard' };
+const NicoPocketEditor = { context: null, title: '', quality: 'standard', artwork: null };
 const titleInput = document.getElementById('draft-title');
 const qualityInput = document.getElementById('audio-quality');
-const image = document.getElementById('artwork-image');
-const emptyImage = document.getElementById('artwork-empty');
-const imageState = document.getElementById('artwork-state');
 const downloadButton = document.getElementById('download');
 let requestingAAC = false;
 let aacState = null;
@@ -13,6 +10,8 @@ let refreshSequence = 0;
 
 function render(context) {
     if (!context) {
+        NicoPocketEditor.context = null;
+        NicoPocketArtwork.setContext(null, NicoPocketEditor);
         downloadButton.disabled = true;
         document.getElementById('video-status').textContent = '動画ページのボタンから開いてください。';
         return;
@@ -35,27 +34,8 @@ function render(context) {
     const count = context.audioQualities.filter(audio => audio.available).length;
     document.getElementById('audio-info').textContent = '標準音質は192 kbps基準。高音質は取得可能な元音源を使用します。'
         + (count ? ` 利用可能な音声品質情報: ${count}件（選択処理は準備中）。` : ' 音声品質情報は未取得です。');
-    const thumbnailUrl = context.thumbnailUrl || '';
-    if (image.getAttribute('src') !== thumbnailUrl || (thumbnailUrl && imageState.textContent === '読み込み失敗')) {
-        image.hidden = true;
-        emptyImage.hidden = false;
-        emptyImage.textContent = thumbnailUrl ? 'サムネイルを読み込んでいます…' : 'サムネイル未取得';
-        imageState.textContent = thumbnailUrl ? '読み込み中' : '未設定';
-        if (thumbnailUrl) image.src = thumbnailUrl;
-        else image.removeAttribute('src');
-    }
+    NicoPocketArtwork.setContext(context, NicoPocketEditor);
 }
-image.addEventListener('load', () => {
-    image.hidden = false;
-    emptyImage.hidden = true;
-    imageState.textContent = '元画像';
-});
-image.addEventListener('error', () => {
-    image.hidden = true;
-    emptyImage.hidden = false;
-    emptyImage.textContent = 'サムネイルを表示できませんでした';
-    imageState.textContent = '読み込み失敗';
-});
 titleInput.addEventListener('input', () => { NicoPocketEditor.title = titleInput.value; });
 qualityInput.addEventListener('change', () => { NicoPocketEditor.quality = qualityInput.value; });
 document.getElementById('close-editor').addEventListener('click', () => window.close());
@@ -85,7 +65,7 @@ function syncAACButton() {
     const labels = { starting: 'AAC取得を開始しています…', acquiring: '音声を取得し、M4Aを生成しています…', saving: 'M4Aを保存しています…', complete: 'M4Aの保存が完了しました。' };
     document.getElementById('save-status').textContent = aacState?.phase === 'error'
         ? aacState.error || '処理に失敗しました。再度実行できます。'
-        : labels[aacState?.phase] || 'M4Aとして保存します。音質選択・Artwork処理は未接続です。';
+        : labels[aacState?.phase] || 'M4Aとして保存します。音質選択・Artwork埋め込みは未接続です。';
 }
 downloadButton.addEventListener('click', async () => {
     if (downloadButton.disabled || requestingAAC || !NicoPocketEditor.context) return;

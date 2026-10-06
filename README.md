@@ -105,7 +105,7 @@ UIはダークテーマ固定です。元ページの「NicoPocketで保存」�
 
 追加AACと不要なプレーヤー設定表示は別拡張機能「ニコニコ保存」との競合でした。その拡張機能の無効化で解消しています。NicoPocket側では同種拡張との共存対応を行いません。
 
-合成検証と実サイト確認は別の証拠として扱います。完成監査の範囲・結果・未確認項目は[FINAL_AUDIT.md](FINAL_AUDIT.md)、発行元診断と撤去結果は[PHASE10_FIX6.md](PHASE10_FIX6.md)を参照してください。過去のPHASE / FIX記録は当時の状態を残しており、古い保存形式・UI・保留事項は現在の仕様を意味しません。
+合成検証と実サイト確認は別の証拠として扱います。完成監査の範囲・結果・未確認項目は[FINAL_AUDIT.md](FINAL_AUDIT.md)、発行元診断と撤去結果は[PHASE10_FIX6.md](docs/development/PHASE10_FIX6.md)を参照してください。過去のPHASE / FIX記録は当時の状態を残しており、古い保存形式・UI・保留事項は現在の仕様を意味しません。
 
 ## Known Limitations
 
@@ -151,4 +151,4 @@ UIはダークテーマ固定です。元ページの「NicoPocketで保存」�
 
 プロジェクトのMIT License本文と`Copyright (c) 2021 masteralice3104`を[LICENSE](LICENSE)および`nico_downloader/LICENSE`に保持しています。追加コードも同じMIT Licenseとして扱います。
 
-同梱FFmpeg等の第三者資産には、それぞれのライセンスが適用されます。プロジェクトのMIT Licenseだけで第三者資産のライセンスを置き換えるものではありません。同梱バイナリには`--enable-gpl`・`--enable-nonfree`・`libfdk-aac`の構成が含まれます。第三者バイナリをMITのみとして扱わず、個人利用の既存基盤として維持します。確認結果は[PHASE10.md](PHASE10.md)に記録しています。
+同梱FFmpeg等の第三者資産には、それぞれのライセンスが適用されます。プロジェクトのMIT Licenseだけで第三者資産のライセンスを置き換えるものではありません。同梱バイナリには`--enable-gpl`・`--enable-nonfree`・`libfdk-aac`の構成が含まれます。第三者バイナリをMITのみとして扱わず、個人利用の既存基盤として維持します。確認結果は[PHASE10.md](docs/development/PHASE10.md)に記録しています。

@@ -29,7 +29,7 @@
     "content_scripts": [
         {
             "matches": ["https://www.nicovideo.jp/*"],
-            "js": ["pocket/content.js"],
+            "js": ["pocket/title.js", "pocket/content.js"],
             "css": ["pocket/content.css"],
             "run_at": "document_start"
         },
@@ -43,7 +43,8 @@
                 "dist/ffmpeg-core2.js",
                 "dist/utils.js",
                 "func/nicojson.js",
-                "func/ndl.js"
+                "func/ndl.js",
+                "pocket/video-info.js"
             ]
         },
         {

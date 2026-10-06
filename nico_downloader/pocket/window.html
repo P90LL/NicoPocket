@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>NicoPocket</title>
   <link rel="stylesheet" href="./window.css" />
+  <script src="./title.js" defer></script>
   <script src="./window.js" defer></script>
 </head>
 <body>
@@ -18,20 +19,22 @@
     <div class="page-heading"><div><p class="eyebrow">EDIT WINDOW</p><h1>保存内容を編集</h1><p>タイトル・Artwork・音質を確認します。</p></div></div>
     <div class="review-layout">
       <section class="card review-main" aria-labelledby="title-heading">
-        <div class="section-heading"><div><h2 id="title-heading">保存内容</h2><p>動画情報の読み込みは準備中です。</p></div></div>
+        <div class="section-heading"><div><h2 id="title-heading">保存内容</h2><p id="video-status" role="status">動画情報を読み込んでいます…</p></div></div>
+        <dl class="video-details"><div><dt>動画ID</dt><dd id="video-id">—</dd></div><div><dt>投稿者</dt><dd id="video-uploader">—</dd></div></dl>
         <div id="draft-editor">
           <label for="draft-title">タイトル / ファイル名</label>
           <div class="input-suffix"><input id="draft-title" type="text" maxlength="500" autocomplete="off" placeholder="タイトルを入力" /><span>.m4a</span></div>
           <div id="draft-options">
             <label for="audio-quality">音質</label>
             <select id="audio-quality" name="quality"><option value="standard" selected>標準音質</option><option value="high">高音質</option></select>
+            <p id="audio-info" class="subtle">標準音質は192 kbps基準。高音質は取得可能な元音源を使用します。</p>
           </div>
         </div>
       </section>
       <aside class="card cover-summary" aria-labelledby="artwork-heading">
-        <div class="section-heading"><h2 id="artwork-heading">Artwork</h2><span class="status-pill">未設定</span></div>
-        <div class="cover-preview"><span>Artworkプレビュー<br>1:1の正方形</span></div>
-        <p>画像の読み込み・トリミングは準備中です。</p>
+        <div class="section-heading"><h2 id="artwork-heading">Artwork</h2><span id="artwork-state" class="status-pill">未設定</span></div>
+        <div class="cover-preview"><img id="artwork-image" alt="現在の動画のサムネイル" referrerpolicy="no-referrer" hidden /><span id="artwork-empty">サムネイル未取得</span></div>
+        <p>元のサムネイルを表示しています。トリミングは準備中です。</p>
         <button class="secondary full" type="button" disabled>Artworkを編集（準備中）</button>
       </aside>
     </div>

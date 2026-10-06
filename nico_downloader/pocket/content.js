@@ -56,7 +56,8 @@ const NicoPocketUI = (() => {
         pending = true;
         button.setAttribute('aria-busy', 'true');
         try {
-            const reply = await chrome.runtime.sendMessage({ kind: 'np:open-editor' });
+            const context = await NicoPocketVideo.readCurrent();
+            const reply = await chrome.runtime.sendMessage({ kind: 'np:open-editor', context });
             if (!reply?.ok) throw new Error('Editor could not be opened');
             document.getElementById('nicopocket-entry-status')?.remove();
         } catch {

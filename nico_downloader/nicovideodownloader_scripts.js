@@ -2,8 +2,10 @@
 
 async function VideoDown(request) {
     // In the NicoPocket product, acquisition starts only through an owned request.
-    if ((typeof NicoPocketUI !== 'undefined') && (request?.outputOwner !== 'nicopocket' || !request.job
-        || globalThis.NicoPocketAAC?.owns(request.job) !== true)) return false;
+    if (request?.outputOwner !== 'nicopocket' || !request.job
+        || globalThis.NicoPocketAAC?.owns(request.job) !== true) return false;
+    if (request.job.acquisitionStarted) return false;
+    request.job.acquisitionStarted = true;
     // 必要なクラスの初期化
     const NicoDownloader = new NicoDownloaderClass(); //NicoDownloaderクラスの初期化
     const Nicovideo = new NicovideoClass(); //NicovideoClassクラスの初期化
@@ -19,8 +21,7 @@ async function VideoDown(request) {
     // Downloadingがtrueの場合は終了
     if (NicoDownloader.VideoDownloadingCheck()) return false;
 
-    // ダウンロードリンクをクリック
-    NicoDownloader.DownloadLinkClick();
+    // Acquisition only: final output is saved by the background-owned M4A job.
 
     // 現在のページのsm番号の取得しセット
     Nicovideo.video_sm = Nicovideo.VideoSmGet(NicoDownloader.MatchingSMIDArray);
@@ -73,13 +74,13 @@ async function VideoDown(request) {
 
         new Promise((resolve, reject) => {
             //ボタンをとりあえず作成
-            NicoDownloader.ButtonFirstMake();
+            // No legacy button or save link is created for an owned request.
 
             NicoDownloader.ButtonTextWrite("処理開始"); //ボタンの文字を変更
 
             // 保存ボタンを作成
             DebugPrint("video_name_savebutton:" + Nicovideo.video_name);
-            NicoDownloader.SaveButtonMake(Nicovideo.video_name);
+
 
             //ダウンロード前のチェック処理
             if (NicoDownloader.CheckBeforeDownload() == false)

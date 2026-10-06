@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="./window.css" />
   <script src="./title.js" defer></script>
   <script src="./metadata.js" defer></script>
+  <script src="./save.js" defer></script>
   <script src="./artwork.js" defer></script>
   <script src="./window.js" defer></script>
 </head>
@@ -51,15 +52,25 @@
 <dialog id="artwork-dialog" aria-labelledby="artwork-dialog-title">
   <h2 id="artwork-dialog-title">Artworkを編集</h2>
   <p class="subtle">固定1:1 · 画像をドラッグして位置を調整</p>
-  <div class="artwork-stage">
-    <canvas id="artwork-background" width="1200" height="768" aria-hidden="true"></canvas>
-    <canvas id="artwork-canvas" width="768" height="768" tabindex="0" aria-label="明るい正方形が最終Artwork。ドラッグまたは矢印キーで位置を調整"></canvas>
+  <div class="crop-layout">
+    <div class="artwork-stage card">
+      <canvas id="artwork-background" width="1200" height="768" aria-hidden="true"></canvas>
+      <div class="crop-selection">
+        <canvas id="artwork-canvas" width="768" height="768" tabindex="0" aria-label="明るい正方形が最終Artwork。ドラッグまたは矢印キーで位置を調整"></canvas>
+        <div class="crop-grid" aria-hidden="true"></div>
+      </div>
+    </div>
+    <aside class="crop-tools card">
+      <div><h2>クロップ設定</h2><p class="subtle">出力は1:1固定。画像をドラッグして位置を調整します。</p></div>
+      <label for="artwork-zoom">ズーム <output id="artwork-zoom-value" for="artwork-zoom">100%</output></label>
+      <input id="artwork-zoom" type="range" min="1" max="4" step="0.01" value="1" />
+      <button id="artwork-reset" class="secondary" type="button">リセット</button>
+      <div class="divider"></div>
+      <div><h2>プレビュー</h2><canvas id="artwork-preview" width="180" height="180" aria-label="最終Artworkのプレビュー"></canvas><p class="subtle">768 × 768 · JPEG</p><p id="artwork-position" class="crop-values"></p></div>
+    </aside>
   </div>
-  <label for="artwork-zoom">ズーム <output id="artwork-zoom-value" for="artwork-zoom">100%</output></label>
-  <input id="artwork-zoom" type="range" min="1" max="4" step="0.01" value="1" />
   <p id="artwork-edit-status" class="subtle" role="status"></p>
   <div class="action-row">
-    <button id="artwork-reset" class="secondary" type="button">リセット</button>
     <button id="artwork-cancel" class="secondary" type="button">キャンセル</button>
     <button id="artwork-apply" class="primary" type="button">適用</button>
   </div>

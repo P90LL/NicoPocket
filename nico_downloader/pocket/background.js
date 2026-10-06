@@ -63,6 +63,7 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
 
 // Single AAC job; existing content-side code performs media acquisition and saving.
 let startingAAC = false;
+const savingRequests = new Set();
 const terminalAAC = state => !state || ['complete', 'error'].includes(state.phase);
 let aacUpdates = Promise.resolve();
 function updateAAC(id, changes) {
@@ -137,7 +138,7 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
                 && bytes.every(value => Number.isInteger(value) && value >= 0 && value <= 255)
                 && bytes[0] === 255 && bytes[1] === 216 && bytes.at(-2) === 255 && bytes.at(-1) === 217
                 ? bytes : null;
-            const state = { id: crypto.randomUUID(), phase: 'starting', videoId: context.videoId,
+            const state = { owner: 'nicopocket', id: crypto.randomUUID(), phase: 'starting', videoId: context.videoId,
                 requestedQuality: message.quality === 'high' ? 'high' : 'standard',
                 sourceTabId: context.sourceTabId, title: NicoPocketTitle.normalize(message.title, context.videoId), startedAt: Date.now(),
                 metadata: { uploader: context.uploader, sourceUrl: context.sourceUrl,
@@ -158,18 +159,29 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
             .finally(() => { startingAAC = false; });
         return true;
     }
-    if (!['np:aac-event', 'np:aac-save-ready'].includes(message?.kind) || !sender.tab || sender.frameId !== 0) return;
+    const editorSave = message?.kind === 'np:aac-save-ready' && sender.url === chrome.runtime.getURL('pocket/window.html');
+    if (!['np:aac-event', 'np:aac-save-ready'].includes(message?.kind)
+        || (!editorSave && (!sender.tab || sender.frameId !== 0))) return;
     void (async () => {
         const stored = await chrome.storage.session.get('np:aacJob');
         const state = stored['np:aacJob'];
-        if (!state || state.id !== message.jobId || state.sourceTabId !== sender.tab.id || terminalAAC(state)) return { ok: false };
+        if (!state || state.id !== message.jobId || (!editorSave && state.sourceTabId !== sender.tab.id) || terminalAAC(state)) return { ok: false };
         if (message.kind === 'np:aac-save-ready') {
-            if (typeof message.url !== 'string' || !message.url.startsWith('blob:https://www.nicovideo.jp/')) return { ok: false };
-            if (state.saveReadyAt) return { ok: false, error: '保存要求は既に開始済みです。' };
-            await updateAAC(state.id, { phase: 'saving', saveUrl: message.url, saveReadyAt: Date.now(), saveActivityAt: Date.now(), saveStatus: 'waiting' });
-            const owners = (await chrome.storage.session.get('np:saveTargets'))['np:saveTargets'] || [];
-            await chrome.storage.session.set({ 'np:saveTargets': [...owners, { id: state.id, url: message.url }].slice(-20) });
-            return { ok: true };
+            if (!editorSave || state.owner !== 'nicopocket' || message.owner !== state.owner
+                || message.mime !== 'audio/mp4' || message.filename !== state.title + '.m4a'
+                || typeof message.url !== 'string' || !message.url.startsWith('blob:' + chrome.runtime.getURL(''))) return { ok: false };
+            if (state.saveReadyAt || savingRequests.has(state.id)) return { ok: false, error: '保存要求は既に開始済みです。' };
+            savingRequests.add(state.id);
+            try {
+                await updateAAC(state.id, { phase: 'saving', saveUrl: message.url, saveReadyAt: Date.now(),
+                    saveActivityAt: Date.now(), saveStatus: 'waiting', saveRequestCount: 1,
+                    savedFilename: message.filename, savedMime: message.mime });
+                const owners = (await chrome.storage.session.get('np:saveTargets'))['np:saveTargets'] || [];
+                await chrome.storage.session.set({ 'np:saveTargets': [...owners,
+                    { id: state.id, owner: state.owner, url: message.url, filename: message.filename }].slice(-20) });
+                const current = (await chrome.storage.session.get('np:aacJob'))['np:aacJob'];
+                return { ok: current?.id === state.id && !terminalAAC(current) };
+            } finally { savingRequests.delete(state.id); }
         } else if (['acquiring', 'processing', 'saving', 'error'].includes(message.phase)) {
             if (state.phase === 'saving' && ['acquiring', 'processing'].includes(message.phase)) return { ok: true };
             const selection = message.audioSelection;
@@ -218,4 +230,43 @@ chrome.tabs.onRemoved.addListener(tabId => {
         const state = stored['np:aacJob'];
         if (state?.sourceTabId === tabId) return updateAAC(state.id, { phase: 'error', error: '取得元タブが閉じられました。' });
     }).catch(console.error);
+});
+
+// A crop dialog also blocks its source video tab; close/window removal restores that tab.
+async function unlockModalSource() {
+    const source = (await chrome.storage.session.get('np:modalSource'))['np:modalSource'];
+    if (source) try { await chrome.tabs.sendMessage(source.sourceTabId, { kind: 'np:modal-lock', open: false }, { frameId: 0 }); } catch { /* Closed/reloaded tab. */ }
+    await chrome.storage.session.remove('np:modalSource');
+}
+let modalUpdates = Promise.resolve();
+chrome.runtime.onMessage.addListener((message, sender, respond) => {
+    if (message?.kind !== 'np:editor-modal' || sender.id !== chrome.runtime.id
+        || sender.url !== chrome.runtime.getURL('pocket/window.html')) return;
+    modalUpdates = modalUpdates.catch(() => {}).then(async () => {
+        if (!message.open) { await unlockModalSource(); return; }
+        const context = (await chrome.storage.session.get('np:videoContext'))['np:videoContext'];
+        if (!context || context.sourceTabId !== message.sourceTabId || context.videoId !== message.videoId
+            || context.sourceUrl !== message.sourceUrl) return;
+        await unlockModalSource();
+        await chrome.storage.session.set({ 'np:modalSource': { sourceTabId: context.sourceTabId, videoId: context.videoId } });
+        await chrome.tabs.sendMessage(context.sourceTabId, { kind: 'np:modal-lock', open: true, videoId: context.videoId }, { frameId: 0 });
+    });
+    modalUpdates.then(() => respond({ ok: true }), () => respond({ ok: false }));
+    return true;
+});
+chrome.windows.onRemoved.addListener(windowId => {
+    void chrome.storage.session.get('np:editorWindowId').then(stored => {
+        if (stored['np:editorWindowId'] === windowId) {
+            modalUpdates = modalUpdates.catch(() => {}).then(unlockModalSource);
+            return modalUpdates;
+        }
+    }).catch(() => {});
+});
+
+chrome.runtime.onConnect.addListener(port => {
+    if (port.name !== 'np:editor-presence' || port.sender?.id !== chrome.runtime.id
+        || port.sender?.url !== chrome.runtime.getURL('pocket/window.html')) return;
+    port.onDisconnect.addListener(() => {
+        modalUpdates = modalUpdates.catch(() => {}).then(unlockModalSource);
+    });
 });

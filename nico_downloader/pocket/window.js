@@ -92,7 +92,7 @@ async function artworkForDownload(context) {
     } catch { console.warn('NicoPocket: Artworkを取得できないため画像なしで保存します。'); return null; }
 }
 downloadButton.addEventListener('click', async () => {
-    if (downloadButton.disabled || requestingAAC || !NicoPocketEditor.context) return;
+    if (document.getElementById('artwork-dialog').open || downloadButton.disabled || requestingAAC || !NicoPocketEditor.context) return;
     const context = NicoPocketEditor.context;
     requestingAAC = true;
     syncAACButton();

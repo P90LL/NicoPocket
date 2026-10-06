@@ -3,7 +3,41 @@ const NicoPocketUI = (() => {
     const legacyLabel = element => /^aacを保存$/i.test((element.textContent || '').replace(/\s+/g, ''));
     const watchPage = () => location.origin === 'https://www.nicovideo.jp'
         && /^\/watch\/[a-zA-Z0-9]+\/?$/.test(location.pathname);
-    let pending = false;
+    let pending = false, modalLock = null, blocker = null;
+    const inertBefore = new Map();
+    function setModalLock(context) {
+        if (context && location.pathname !== '/watch/' + context.videoId) return;
+        modalLock = context;
+        if (!context) {
+            blocker?.remove(); blocker = null;
+            for (const [element, inert] of inertBefore) if (element.isConnected) element.inert = inert;
+            inertBefore.clear(); return;
+        }
+        if (!document.body) return;
+        if (!blocker) {
+            blocker = document.createElement('div');
+            blocker.setAttribute('role', 'status');
+            blocker.textContent = 'NicoPocketでArtworkを編集中です';
+            blocker.style.cssText = 'position:fixed;inset:0;z-index:2147483647;display:grid;place-items:center;background:#11172299;color:#edf2fa;pointer-events:auto;touch-action:none;';
+            document.body.append(blocker);
+        }
+        for (const element of document.body.children) if (element !== blocker) {
+            if (!inertBefore.has(element)) inertBefore.set(element, element.inert);
+            element.inert = true;
+        }
+    }
+    function blockModalInput(event) {
+        if (!modalLock) return;
+        event.preventDefault(); event.stopImmediatePropagation();
+    }
+    for (const name of ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'wheel', 'keyup', 'input', 'change']) {
+        document.addEventListener(name, blockModalInput, { capture: true, passive: false });
+    }
+    chrome.runtime.onMessage.addListener((message, sender, reply) => {
+        if (message?.kind !== 'np:modal-lock' || sender.id !== chrome.runtime.id || sender.tab) return;
+        setModalLock(message.open ? { videoId: message.videoId } : null);
+        reply({ ok: true });
+    });
 
     function saveControls() {
         return [...document.querySelectorAll('button,a,[role="button"]')].filter(legacyLabel);
@@ -28,6 +62,10 @@ const NicoPocketUI = (() => {
         link?.remove();
     }
     function placeButton() {
+        if (modalLock) {
+            if (location.pathname !== '/watch/' + modalLock.videoId) setModalLock(null);
+            else setModalLock(modalLock);
+        }
         if (watchPage()) discardLegacyLink();
         if (globalThis.NicoPocketAAC?.busy) return;
         if (!watchPage()) {
@@ -83,6 +121,7 @@ const NicoPocketUI = (() => {
         }
     }
     function intercept(event) {
+        if (modalLock) { blockModalInput(event); return; }
         if (!watchPage()) return;
         const legacy = event.target instanceof Element ? event.target.closest('a#downloadlink') : null;
         if (legacy) {
@@ -91,13 +130,17 @@ const NicoPocketUI = (() => {
         const button = event.target instanceof Element
             ? event.target.closest('[data-nicopocket-editor],button,a,[role="button"]') : null;
         if (!button || (!button.hasAttribute('data-nicopocket-editor') && !legacyLabel(button))) return;
-        if (event.type === 'keydown' && (button.tagName !== 'A' || !['Enter', ' '].includes(event.key))) return;
+        if (event.type === 'keydown' && !['Enter', ' '].includes(event.key)) { event.stopImmediatePropagation(); return; }
         event.preventDefault();
         event.stopImmediatePropagation();
         if (!button.hasAttribute('data-nicopocket-editor')) convert(button);
         void openEditor(button);
     }
     // Installed at document_start: even a newly inserted AAC control cannot save first.
+    for (const name of ['pointerdown', 'pointerup']) document.addEventListener(name, event => {
+        const button = event.target instanceof Element ? event.target.closest('[data-nicopocket-editor]') : null;
+        if (button) event.stopImmediatePropagation();
+    }, true);
     document.addEventListener('click', intercept, true);
     document.addEventListener('keydown', intercept, true);
     new MutationObserver(placeButton).observe(document, { childList: true, subtree: true });

@@ -1,6 +1,7 @@
 // Adapts the existing VideoDown -> MovieDownload_domand -> DownEncoder pipeline.
 // No playlist, segment, FFmpeg argument or Blob implementation is duplicated.
 (() => {
+    if (globalThis.NicoPocketAAC) return; // Prevent duplicate bridge/listener installation.
     let active = null;
     const owned = downloader => downloader._nicoPocketJob?.outputOwner === 'nicopocket';
     const currentId = () => /^\/watch\/([a-zA-Z0-9]+)\/?$/.exec(location.pathname)?.[1];
@@ -53,12 +54,8 @@
     NicoDownloaderClass.prototype.VideoDownloadNameMake = function (...args) {
         return owned(this) ? this._nicoPocketJob.title + '.m4a' : makeName.apply(this, args);
     };
-    const legacySave = NicoDownloaderClass.prototype.DownloadLinkClick;
-    NicoDownloaderClass.prototype.DownloadLinkClick = function (...args) {
-        // VideoDown and the page-wide click handler must never click a pending legacy link.
-        if ((typeof NicoPocketUI !== 'undefined') || active || owned(this)) return false;
-        return legacySave.apply(this, args);
-    };
+    // This product never resumes upstream page-bound save links.
+    NicoDownloaderClass.prototype.DownloadLinkClick = function () { return false; };
     const buttonText = NicoDownloaderClass.prototype.ButtonTextWrite;
     NicoDownloaderClass.prototype.ButtonTextWrite = function (text) {
         const job = owned(this) ? this._nicoPocketJob : null;
@@ -172,7 +169,8 @@
     };
     const encoder = DownEncoder;
     DownEncoder = function (...args) {
-        const job = args[0]._nicoPocketJob || active;
+        const job = args[0]._nicoPocketJob;
+        if (!job || !owned(args[0])) return false;
         if (job) guard(job);
         const task = encoder(...args);
         if (job) {
@@ -215,10 +213,11 @@
     };
     const movie = MovieDownload_domand;
     MovieDownload_domand = function (...args) {
-        const job = active;
+        const job = args[1]._nicoPocketJob;
+        if (job?.outputOwner !== 'nicopocket') return false;
         if (job) {
             guard(job);
-            args[1]._nicoPocketJob = job;
+            if (args[0].video_sm !== job.videoId) throw new Error('取得対象の動画IDが一致しません。');
             const audios = args[0].GetWatchData()?.media?.domand?.audios;
             if (Array.isArray(audios) && audios.length) job.audioQualities = audios.map(audio => ({ id: audio.id, available: audio.isAvailable === true }));
             args[1]._nicoPocketMetadata = { ...job.metadata, title: job.title, videoId: job.videoId };
@@ -236,15 +235,22 @@
             if (!(blob instanceof Blob) || blob.type !== 'audio/mp4' || filename !== job.title + '.m4a') {
                 throw new Error('M4A保存データを確認できませんでした。');
             }
-            job.blobUrl = URL.createObjectURL(blob);
-            job.saveDeadline = setTimeout(() => failed(job, '保存開始待ちがタイムアウトしました。Chromeの許可・保存先を確認して再試行してください。'), 60000);
-            const ready = await chrome.runtime.sendMessage({ kind: 'np:aac-save-ready', jobId: job.id, url: job.blobUrl });
-            if (!ready?.ok) throw new Error(ready?.error || 'Chrome側で保存を開始できませんでした。許可や保存先を確認して再試行してください。');
+            const bytes = new Uint8Array(await blob.arrayBuffer());
             guard(job);
-            // A detached, job-owned final M4A link; never expose a legacy save control.
-            const link = document.createElement('a');
-            link.href = job.blobUrl; link.download = filename;
-            link.click();
+            let reply = await chrome.runtime.sendMessage({ kind: 'np:m4a-transfer', stage: 'begin',
+                jobId: job.id, filename, mime: blob.type, size: bytes.length });
+            if (!reply?.ok) throw new Error(reply?.error || '保存ウィンドウへ接続できませんでした。');
+            for (let offset = 0, index = 0; offset < bytes.length; offset += 65536, index++) {
+                guard(job);
+                reply = await chrome.runtime.sendMessage({ kind: 'np:m4a-transfer', stage: 'chunk',
+                    jobId: job.id, index, bytes: Array.from(bytes.subarray(offset, offset + 65536)) });
+                if (!reply?.ok) throw new Error('M4Aの転送に失敗しました。');
+            }
+            guard(job);
+            job.saveDeadline = setTimeout(() => failed(job, '保存開始待ちがタイムアウトしました。Chromeの許可・保存先を確認して再試行してください。'), 60000);
+            reply = await chrome.runtime.sendMessage({ kind: 'np:m4a-transfer', stage: 'end', jobId: job.id });
+            if (!reply?.ok) throw new Error(reply?.error || 'M4Aの保存を開始できませんでした。');
+
         } catch (error) { failed(job, error.message || 'M4Aの保存開始に失敗しました。'); }
     }
     async function prepare(job) {
@@ -255,19 +261,14 @@
         if (!values.language_setting) localStorage.setItem('language_setting', 'ja');
         if (values.debug == null) localStorage.setItem('debug', '0');
         const downloader = new NicoDownloaderClass();
-        const settings = document.querySelector(VideoData.PlayerSettingQuery);
-        if (!downloader.MasterURLGet()) settings?.click();
+        // Observe existing source information without clicking the player settings.
         const deadline = Date.now() + 15000;
         while (!downloader.MasterURLGet()) {
             guard(job);
-            const logButton = [...document.querySelectorAll('button,[role="button"]')]
-                .find(element => (element.textContent || '').trim() === 'システムメッセージを表示');
-            logButton?.click();
-            if (Date.now() > deadline) throw new Error('音声の配信元を確認できませんでした。再生してから再度実行してください。');
+            if (Date.now() > deadline) throw new Error('音声の配信元を確認できませんでした。再生し、プレーヤー設定からシステムメッセージを表示して再試行してください。');
             await new Promise(resolve => setTimeout(resolve, 200));
         }
         guard(job);
-        last_save_sm = '';
         NicovideoDownloader__LoadedVideoSMID = '-1';
         const staleLink = document.getElementById(VideoData.Video_DLlink.a2);
         if (staleLink?.href.startsWith('blob:')) URL.revokeObjectURL(staleLink.href);
@@ -292,6 +293,7 @@
         const job = { outputOwner: 'nicopocket', controller: new AbortController(), id: message.jobId, videoId: message.videoId, title: NicoPocketTitle.normalize(message.title, message.videoId), metadata: message.metadata || {}, artwork: Array.isArray(message.artwork) ? message.artwork : null };
         job.requestedQuality = message.requestedQuality === 'high' ? 'high' : 'standard';
         job.audioQualities = Array.isArray(message.audioQualities) ? message.audioQualities : [];
+        job.onError = error => failed(job, error.message || 'M4A生成に失敗しました。');
         job.onOutput = (blob, filename) => { void save(job, blob, filename); };
         active = job;
         job.watch = setInterval(() => {

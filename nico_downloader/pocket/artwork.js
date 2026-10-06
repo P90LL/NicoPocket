@@ -1,5 +1,6 @@
 // Square crop editing and JPEG export; media embedding remains outside this UI module.
 const NicoPocketArtwork = (() => {
+    const presence = chrome.runtime.connect({ name: 'np:editor-presence' });
     const dialog = document.getElementById('artwork-dialog');
     const canvas = document.getElementById('artwork-canvas');
     const zoom = document.getElementById('artwork-zoom');
@@ -13,6 +14,35 @@ const NicoPocketArtwork = (() => {
     const note = document.getElementById('artwork-note');
     const background = document.getElementById('artwork-background');
     const stage = document.querySelector('.artwork-stage');
+    const shell = document.querySelector('.app-shell');
+    const preview = document.getElementById('artwork-preview');
+    let priorFocus, priorOverflow, priorAria, modalContext;
+    // Inert blocks user input; this also blocks accidental programmatic background events.
+    for (const name of ['click', 'pointerdown', 'mousedown', 'keydown', 'wheel', 'input', 'change']) {
+        shell.addEventListener(name, event => {
+            if (!dialog.open) return;
+            event.preventDefault(); event.stopImmediatePropagation();
+        }, { capture: true, passive: false });
+    }
+    for (const name of ['click', 'pointerdown', 'pointermove', 'pointerup', 'mousedown', 'mouseup', 'input', 'change', 'keyup']) {
+        dialog.addEventListener(name, event => event.stopPropagation());
+    }
+    dialog.addEventListener('wheel', event => {
+        event.stopPropagation();
+        if (!stage.contains(event.target)) event.preventDefault();
+    }, { passive: false });
+    dialog.addEventListener('keydown', event => {
+        event.stopPropagation();
+        if (event.key === 'Escape') { event.preventDefault(); dialog.close(); return; }
+        if (event.key !== 'Tab') return;
+        const controls = [...dialog.querySelectorAll('button:not(:disabled), input:not(:disabled), [tabindex="0"]')];
+        const first = controls[0], last = controls.at(-1);
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    });
+    document.addEventListener('focusin', event => {
+        if (dialog.open && !dialog.contains(event.target)) canvas.focus();
+    });
     let editor, state, bitmap, controller, draft, dragging, generation = 0, pendingLoad;
     let sourcePreview = '', editedPreview = '', loading = false, exporting = false;
     const SIZE = 768;
@@ -103,6 +133,8 @@ const NicoPocketArtwork = (() => {
         backdrop.clearRect(0, 0, background.width, background.height);
         backdrop.drawImage(bitmap, width / 2 - (bitmap.width / 2 + draft.x) * scale,
             height / 2 - (bitmap.height / 2 + draft.y) * scale, bitmap.width * scale, bitmap.height * scale);
+        preview.getContext('2d').drawImage(canvas, 0, 0, preview.width, preview.height);
+        document.getElementById('artwork-position').textContent = 'X ' + Math.round(draft.x) + ' · Y ' + Math.round(draft.y);
         zoom.value = draft.zoom; zoomLabel.textContent = Math.round(draft.zoom * 100) + '%';
     }
     async function open() {
@@ -114,11 +146,27 @@ const NicoPocketArtwork = (() => {
         status.textContent = '枠内が最終Artworkになります。ドラッグで位置を調整してください。';
         apply.disabled = false; zoom.disabled = false;
         document.getElementById('artwork-reset').disabled = false;
-        dialog.showModal(); draw();
+        modalContext = { sourceTabId: state.sourceTabId, videoId: state.videoId, sourceUrl: state.sourceUrl };
+        void chrome.runtime.sendMessage({ kind: 'np:editor-modal', open: true, ...modalContext }).catch(() => {});
+        priorFocus = document.activeElement;
+        priorOverflow = document.documentElement.style.overflow;
+        priorAria = shell.getAttribute('aria-hidden');
+        dialog.showModal();
+        shell.inert = true; shell.setAttribute('aria-hidden', 'true');
+        document.documentElement.style.overflow = 'hidden';
+        canvas.focus({ preventScroll: true }); draw();
     }
     edit.addEventListener('click', () => { void open(); });
     document.getElementById('artwork-cancel').addEventListener('click', () => dialog.close());
-    dialog.addEventListener('close', () => { draft = dragging = null; canvas.dataset.dragging = 'false'; });
+    dialog.addEventListener('close', () => {
+        void chrome.runtime.sendMessage({ kind: 'np:editor-modal', open: false, ...modalContext }).catch(() => {});
+        modalContext = null;
+        draft = dragging = null; canvas.dataset.dragging = 'false';
+        shell.inert = false;
+        if (priorAria == null) shell.removeAttribute('aria-hidden'); else shell.setAttribute('aria-hidden', priorAria);
+        document.documentElement.style.overflow = priorOverflow || '';
+        if (priorFocus?.isConnected && !priorFocus.disabled) priorFocus.focus({ preventScroll: true });
+    });
     document.getElementById('artwork-reset').addEventListener('click', () => {
         if (!draft || exporting) return;
         draft = { zoom: 1, x: 0, y: 0 }; draw();
@@ -132,12 +180,14 @@ const NicoPocketArtwork = (() => {
     zoom.addEventListener('input', () => setZoom(Number(zoom.value)));
     stage.addEventListener('wheel', event => {
         if (!draft || exporting) return;
-        event.preventDefault();
+        event.preventDefault(); event.stopPropagation();
         const delta = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? canvas.clientHeight : 1);
         setZoom(draft.zoom * Math.exp(-Math.max(-100, Math.min(100, delta)) * 0.002));
     }, { passive: false });
     stage.addEventListener('pointerdown', event => {
         if (!draft || exporting || event.button !== 0) return;
+        event.preventDefault(); event.stopPropagation();
+        canvas.focus({ preventScroll: true });
         canvas.setPointerCapture(event.pointerId);
         canvas.dataset.dragging = 'true';
         dragging = { id: event.pointerId, x: event.clientX, y: event.clientY };
@@ -181,7 +231,7 @@ const NicoPocketArtwork = (() => {
         }
     });
     window.addEventListener('np:download-state', () => summary());
-    window.addEventListener('pagehide', release);
+    window.addEventListener('pagehide', () => { release(); presence.disconnect(); });
     new ResizeObserver(() => { if (dialog.open) draw(); }).observe(dialog);
     return { setContext, async ready(context) {
         const target = state;

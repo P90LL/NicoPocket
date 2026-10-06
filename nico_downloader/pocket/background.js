@@ -1,4 +1,4 @@
-// Carries lightweight video information; media acquisition stays disconnected.
+// Carries lightweight video information and explicit download requests.
 importScripts('title.js');
 let opening = Promise.resolve();
 async function openEditor(context, sourceTabId) {
@@ -44,6 +44,9 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
     const context = {
         videoId: data.videoId, sourceUrl, title: data.title.slice(0, 500),
         originalTitle: data.originalTitle.slice(0, 1000), uploader: data.uploader.slice(0, 500),
+        genre: typeof data.genre === 'string' ? data.genre.trim().slice(0, 500) : '',
+        series: typeof data.series === 'string' ? data.series.trim().slice(0, 500) : '',
+        registeredAt: typeof data.registeredAt === 'string' ? data.registeredAt.trim().slice(0, 100) : '',
         thumbnailUrl: /^https:\/\//.test(data.thumbnailUrl) ? data.thumbnailUrl : '',
         audioQualities: data.audioQualities.slice(0, 30).map(audio => ({
             id: typeof audio?.id === 'string' ? audio.id.slice(0, 100) : '',
@@ -92,12 +95,14 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
             if (!context || context.videoId !== message.videoId || context.sourceTabId !== message.sourceTabId
                 || context.sourceUrl !== message.sourceUrl) throw new Error('表示中の動画情報が変わりました。開き直してください。');
             const state = { id: crypto.randomUUID(), phase: 'starting', videoId: context.videoId,
-                sourceTabId: context.sourceTabId, title: NicoPocketTitle.normalize(message.title, context.videoId), startedAt: Date.now() };
+                sourceTabId: context.sourceTabId, title: NicoPocketTitle.normalize(message.title, context.videoId), startedAt: Date.now(),
+                metadata: { uploader: context.uploader, sourceUrl: context.sourceUrl,
+                    genre: context.genre, series: context.series, registeredAt: context.registeredAt } };
             await chrome.storage.session.set({ 'np:aacJob': state });
             try {
                 // Receiver verifies the current watch ID again immediately before execution.
                 const reply = await chrome.tabs.sendMessage(context.sourceTabId, {
-                    kind: 'np:aac-run', jobId: state.id, videoId: context.videoId, title: state.title
+                    kind: 'np:aac-run', jobId: state.id, videoId: context.videoId, title: state.title, metadata: state.metadata
                 }, { frameId: 0 });
                 if (!reply?.ok) throw new Error(reply?.error || '取得元タブでAAC処理を開始できませんでした。');
                 return { ok: true, jobId: state.id };

@@ -129,7 +129,11 @@
     const movie = MovieDownload_domand;
     MovieDownload_domand = function (...args) {
         const job = active;
-        if (job) { guard(job); args[1]._nicoPocketJob = job; }
+        if (job) {
+            guard(job);
+            args[1]._nicoPocketJob = job;
+            args[1]._nicoPocketMetadata = { ...job.metadata, title: job.title, videoId: job.videoId };
+        }
         const task = movie(...args);
         if (job) void Promise.resolve(task).then(result => {
             if (result === false) failed(job, '音声プレイリストを取得できませんでした。');
@@ -190,7 +194,7 @@
         if (active || message.videoId !== currentId() || location.origin !== 'https://www.nicovideo.jp') {
             respond({ ok: false, error: '処理中、または取得元動画が切り替わっています。' }); return;
         }
-        const job = { controller: new AbortController(), id: message.jobId, videoId: message.videoId, title: NicoPocketTitle.normalize(message.title, message.videoId) };
+        const job = { controller: new AbortController(), id: message.jobId, videoId: message.videoId, title: NicoPocketTitle.normalize(message.title, message.videoId), metadata: message.metadata || {} };
         active = job;
         job.watch = setInterval(() => {
             if (!sameSource(job)) failed(job, '取得元動画が切り替わりました。現在の動画から開き直してください。');

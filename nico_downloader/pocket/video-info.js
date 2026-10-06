@@ -37,6 +37,7 @@ const NicoPocketVideo = (() => {
             videoId, sourceUrl, originalTitle,
             title: NicoPocketTitle.normalize(originalTitle, videoId),
             uploader, thumbnailUrl, audioQualities,
+            genre: video.JsonToGenre(), series: video.JsonToSeries(), registeredAt: video.JsonToRegisteredAt(),
             informationSource: failed || !returnedId ? 'page-fallback' : 'upstream-json',
             incomplete: !originalTitle || !uploader || !thumbnailUrl
         };

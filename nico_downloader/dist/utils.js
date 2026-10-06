@@ -49,15 +49,34 @@ const runFFmpeg_m3u8 = async (
   });
 
   // NicoPocket M4A: copy the existing audio stream directly into MP4.
-  // User metadata is deliberately deferred to Phase 5.
   if (mode === "m4a") {
     NicoDownloader.SetVideFormatByExtension(mode);
     NicoDownloader.FSOutputFileNameSet(Nicovideo);
+    // Reuse upstream tag names; values come from the editor's source context.
+    const info = NicoDownloader._nicoPocketMetadata || {};
+    const tags = {
+      title: info.title, artist: info.uploader, episode_id: info.videoId,
+      comment: info.sourceUrl, genre: info.genre, album: info.series,
+      album_artist: info.series ? info.uploader : undefined,
+    };
+    if (typeof info.registeredAt === "string" && info.registeredAt.trim()
+        && Number.isFinite(Date.parse(info.registeredAt))) {
+      tags.date = info.registeredAt;
+      tags.creation_time = info.registeredAt;
+    }
+    const metadataArgs = Object.entries(tags).flatMap(([key, value]) => {
+      if (typeof value !== "string") return [];
+      const text = value.replace(/[\u0000-\u001f\u007f]/g, " ").trim();
+      if (!text) return [];
+      // parseArgs uses writeAsciiToMemory: pass UTF-8 bytes, as upstream does.
+      const utf8 = Array.from(new TextEncoder().encode(text), byte => String.fromCharCode(byte)).join("");
+      return ["-metadata", `${key}=${utf8}`];
+    });
     const ffmpegArgs = [
       "-allowed_extensions", "ALL", "-i", m3u8name,
       "-map", "0:a:0", "-vn", "-c:a", "copy",
       "-map_metadata", "-1", "-map_metadata:s:a", "-1",
-      "-map_chapters", "-1", "-f", "mp4",
+      "-map_chapters", "-1", ...metadataArgs, "-f", "mp4",
       NicoDownloader.FSOutputFileNameGet(),
     ];
     console.log(`FFmpegコマンド: ffmpeg ${ffmpegArgs.join(" ")}`);

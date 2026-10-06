@@ -37,11 +37,138 @@
     const failed = (job, text) => stop(job, 'error', text);
     function guard(job) {
         if (!sameSource(job)) {
+            discovery(job, 'source_invalidated', { failed: true });
             const error = new Error('取得元動画が切り替わりました。');
             error.nicoPocketJobId = job.id;
             throw error;
         }
     }
+    function discovery(job, stage, details = {}) {
+        job.sourceDiscovery = { ...job.sourceDiscovery, stage, ...details };
+        void chrome.runtime.sendMessage({ kind: 'np:aac-event', jobId: job.id,
+            phase: 'acquiring', sourceDiscovery: job.sourceDiscovery }).catch(() => {});
+    }
+    const sourceVideos = new Map();
+    const masterURL = NicoDownloaderClass.prototype.MasterURLGet;
+    NicoDownloaderClass.prototype.MasterURLGet = function () {
+        const job = this._nicoPocketJob;
+        if (!job) return masterURL.call(this);
+        guard(job);
+        return job.masterUrl || masterURL.call(this);
+    };
+    const systemReady = NicoDownloaderClass.prototype.CheckSystemMessageContainer;
+    NicoDownloaderClass.prototype.CheckSystemMessageContainer = function () {
+        const job = this._nicoPocketJob;
+        if (!job) return systemReady.call(this);
+        guard(job);
+        // Discovery was completed before its temporary UI was closed.
+        return Boolean(job.masterUrl);
+    };
+    const visible = element => Boolean(element?.isConnected && element.getClientRects().length
+        && getComputedStyle(element).visibility !== 'hidden');
+    function settingsPanel() {
+        return [...document.getElementsByClassName(VideoData.PlayerSettingClass)].find(visible) || panelWithTitle('動画プレーヤー設定');
+    }
+    function systemPanel() {
+        const dialog = [...document.querySelectorAll('dialog,[role="dialog"]')]
+            .find(element => visible(element) && /システムメッセージ/.test(element.textContent || ''));
+        if (dialog) return dialog;
+        return panelWithTitle('システムメッセージ');
+    }
+    function panelWithTitle(title) {
+        const heading = [...document.querySelectorAll('h1,h2,h3,span,div')].find(element => visible(element)
+            && (element.textContent || '').trim() === title);
+        for (let panel = heading?.parentElement; panel && panel !== document.body; panel = panel.parentElement) {
+            if (closeButton(panel)) return panel;
+        }
+        return null;
+    }
+    function closeButton(panel) {
+        return panel && [...panel.querySelectorAll('button,[role="button"]')].find(element => visible(element)
+            && /閉じる|^close$/i.test((element.getAttribute('aria-label') || element.getAttribute('title') || element.textContent || '').trim()));
+    }
+    async function discoverSource(job, downloader) {
+        const settings = document.querySelector(VideoData.PlayerSettingQuery);
+        const settingsInitiallyOpen = visible(settingsPanel()) || settings?.getAttribute('aria-expanded') === 'true';
+        const systemInitiallyOpen = systemPanel();
+        const focusBefore = document.activeElement;
+        let openedSettings = false, openedSystem = false;
+        const deadline = Date.now() + 15000;
+        discovery(job, 'checking', { masterAvailable: false, systemMessageAvailable: false, audioCandidateCount: 0 });
+        try {
+            while (Date.now() < deadline) {
+                guard(job);
+                const url = masterURL.call(downloader, systemPanel() || document);
+                const messages = document.getElementsByClassName(VideoData.SystemMessageContainer);
+                if (url && (!sourceVideos.has(url) || sourceVideos.get(url) === job.videoId)) {
+                    // Retain the source only in this current job: closing the log may remove its DOM.
+                    const parsed = new URL(url);
+                    if (parsed.protocol !== 'https:' || parsed.hostname !== 'delivery.domand.nicovideo.jp'
+                        || parsed.username || parsed.password) throw new Error('配信元の形式を確認できませんでした。');
+                    job.masterUrl = url;
+                    sourceVideos.set(url, job.videoId);
+                    if (sourceVideos.size > 20) sourceVideos.delete(sourceVideos.keys().next().value);
+                    discovery(job, 'source_ready', { masterAvailable: true, systemMessageAvailable: messages.length > 0 });
+                    return;
+                }
+                const video = document.querySelector('video');
+                const logButton = [...document.querySelectorAll('button,[role="button"]')]
+                    .find(element => visible(element) && (element.textContent || '').trim() === 'システムメッセージを表示');
+                discovery(job, messages.length ? 'hls_url_missing' : video && video.readyState === 0
+                    ? 'initialization_pending' : 'system_message_pending', { systemMessageAvailable: messages.length > 0 });
+                // Existing DOM source is always tried first. Only restore upstream discovery controls.
+                if (!openedSystem && !systemInitiallyOpen && logButton) {
+                    guard(job); logButton.click(); openedSystem = true;
+                } else if (!openedSettings && !settingsInitiallyOpen && !logButton && visible(settings)) {
+                    guard(job); settings.click(); openedSettings = true;
+                }
+                await new Promise(resolve => setTimeout(resolve, 150));
+            }
+            discovery(job, job.sourceDiscovery.stage, { failed: true });
+            throw new Error('音声の配信元を確認できませんでした。動画の再生状態を確認して再試行してください。');
+        } finally {
+            // Restore only UI opened by this preparation. Never click a save target/body.
+            if (currentId() === job.videoId) {
+                if (openedSystem && !systemInitiallyOpen) {
+                    const panel = systemPanel();
+                    const close = closeButton(panel);
+                    if (close) close.click();
+                    else if (panel instanceof HTMLDialogElement) panel.close();
+                    for (let i = 0; i < 10 && systemPanel() && currentId() === job.videoId; i++) await new Promise(resolve => setTimeout(resolve, 50));
+                }
+                if (openedSettings && !settingsInitiallyOpen) {
+                    const panel = settingsPanel();
+                    const close = closeButton(panel);
+                    if (close) close.click();
+                    else if (visible(panel) || settings?.getAttribute('aria-expanded') === 'true') settings?.click();
+                    for (let i = 0; i < 10 && (visible(settingsPanel()) || settings?.getAttribute('aria-expanded') === 'true')
+                        && currentId() === job.videoId; i++) await new Promise(resolve => setTimeout(resolve, 50));
+                }
+                if (focusBefore?.isConnected && typeof focusBefore.focus === 'function') focusBefore.focus({ preventScroll: true });
+            }
+            job.sourceDiscovery.uiRestored = (!openedSystem || !systemPanel() || Boolean(systemInitiallyOpen))
+                && (!openedSettings || !visible(settingsPanel()) && settings?.getAttribute('aria-expanded') !== 'true');
+            discovery(job, job.sourceDiscovery.stage, { uiRestored: job.sourceDiscovery.uiRestored });
+            if (!job.sourceDiscovery.uiRestored && sameSource(job)) {
+                throw new Error('配信元確認に使用したプレーヤー画面を閉じられませんでした。閉じてから再試行してください。');
+            }
+        }
+    }
+    const playlist = NicoDownloaderClass.prototype.URLToM3u8Set;
+    NicoDownloaderClass.prototype.URLToM3u8Set = async function (type, ...args) {
+        const job = this._nicoPocketJob;
+        if (job) { guard(job); discovery(job, type === 'First' ? 'master_playlist_pending' : 'audio_playlist_pending'); }
+        let result;
+        try { result = await playlist.call(this, type, ...args); }
+        catch (error) { if (job) discovery(job, type === 'First' ? 'master_playlist_missing' : 'audio_playlist_missing', { failed: true }); throw error; }
+        if (job) {
+            guard(job);
+            discovery(job, type === 'First' ? 'master_playlist_ready' : type === 'Audio' ? 'audio_source_ready' : 'video_playlist_ready',
+                type === 'First' ? { audioCandidateCount: (this.M3u8.FirstBody_json?.['EXT-X-MEDIA'] || []).length } : {});
+        }
+        return result;
+    };
+
     // These wrappers apply only while a NicoPocket request is active.
     const option = Option_setLoading;
     Option_setLoading = function (name) {
@@ -183,9 +310,14 @@
     };
     const chooseAudio = NicoDownloaderClass.prototype.M3u8ToAudioAndVideoUrlSet;
     NicoDownloaderClass.prototype.M3u8ToAudioAndVideoUrlSet = function (...args) {
-        const result = chooseAudio.apply(this, args);
+        let result;
+        try { result = chooseAudio.apply(this, args); }
+        catch (error) {
+            if (this._nicoPocketJob) discovery(this._nicoPocketJob, 'audio_rendition_missing', { failed: true });
+            throw error;
+        }
         const job = this._nicoPocketJob;
-        if (!job || !result) return result;
+        if (!job || !result) { if (job) discovery(job, 'audio_selection_failed', { failed: true }); return result; }
         guard(job);
         const selected = NicoPocketAudioQuality.select(this.M3u8.FirstBody_json['EXT-X-MEDIA'] || [],
             job.audioQualities, job.requestedQuality);
@@ -261,13 +393,8 @@
         if (!values.language_setting) localStorage.setItem('language_setting', 'ja');
         if (values.debug == null) localStorage.setItem('debug', '0');
         const downloader = new NicoDownloaderClass();
-        // Observe existing source information without clicking the player settings.
-        const deadline = Date.now() + 15000;
-        while (!downloader.MasterURLGet()) {
-            guard(job);
-            if (Date.now() > deadline) throw new Error('音声の配信元を確認できませんでした。再生し、プレーヤー設定からシステムメッセージを表示して再試行してください。');
-            await new Promise(resolve => setTimeout(resolve, 200));
-        }
+        downloader._nicoPocketJob = job;
+        await discoverSource(job, downloader);
         guard(job);
         NicovideoDownloader__LoadedVideoSMID = '-1';
         const staleLink = document.getElementById(VideoData.Video_DLlink.a2);
@@ -297,7 +424,7 @@
         job.onOutput = (blob, filename) => { void save(job, blob, filename); };
         active = job;
         job.watch = setInterval(() => {
-            if (!sameSource(job)) failed(job, '取得元動画が切り替わりました。現在の動画から開き直してください。');
+            if (!sameSource(job)) { discovery(job, 'source_invalidated', { failed: true }); failed(job, '取得元動画が切り替わりました。現在の動画から開き直してください。'); }
         }, 300);
         job.deadline = setTimeout(() => failed(job, '処理の完了を確認できませんでした。動画ページを再読み込みしてください。'), 30 * 60 * 1000);
         void prepare(job).catch(error => failed(job, error.message || '取得開始に失敗しました。'));

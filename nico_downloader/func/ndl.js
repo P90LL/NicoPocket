@@ -572,13 +572,13 @@ class NicoDownloaderClass {
      * @returns {String} masterURL
      */
     ////////////////////////////////////////////////////////////////////////
-    MasterURLGet() {
+    MasterURLGet(container = document) {
         //メッセージより読み込み
         let rawMessage;
         let tempURL = '';
-        for (let i = 0; i < document.getElementsByClassName(VideoData.SystemMessageContainer).length; i++) {
+        for (let i = 0; i < container.getElementsByClassName(VideoData.SystemMessageContainer).length; i++) {
             DebugPrint("masterURL" + i)
-            const message = document.getElementsByClassName(VideoData.SystemMessageContainer)[i].innerText;
+            const message = container.getElementsByClassName(VideoData.SystemMessageContainer)[i].innerText;
             if (message.match(/(動画の初期化処理が完了しました).*/)) {
                 DebugPrint("URL発見");
                 rawMessage = String(message)

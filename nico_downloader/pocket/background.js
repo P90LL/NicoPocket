@@ -184,12 +184,24 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
             } finally { savingRequests.delete(state.id); }
         } else if (['acquiring', 'processing', 'saving', 'error'].includes(message.phase)) {
             if (state.phase === 'saving' && ['acquiring', 'processing'].includes(message.phase)) return { ok: true };
+            const source = message.sourceDiscovery;
+            const stages = ['checking', 'initialization_pending', 'system_message_pending', 'hls_url_missing',
+                'source_ready', 'master_playlist_pending', 'master_playlist_missing', 'master_playlist_ready', 'audio_playlist_pending', 'audio_playlist_missing',
+                'audio_rendition_missing', 'audio_selection_failed', 'audio_source_ready', 'video_playlist_ready', 'source_invalidated'];
+            const sourceDiscovery = source && stages.includes(source.stage) ? {
+                stage: source.stage, masterAvailable: source.masterAvailable === true,
+                systemMessageAvailable: source.systemMessageAvailable === true,
+                audioCandidateCount: Number.isFinite(source.audioCandidateCount) ? Math.min(100, Math.max(0, source.audioCandidateCount)) : 0,
+                uiRestored: source.uiRestored === true, failed: source.failed === true
+            } : undefined;
             const selection = message.audioSelection;
             const audioSelection = selection ? { requestedQuality: state.requestedQuality,
                 selectedAudioId: typeof selection.selectedAudioId === 'string' && /^audio-[a-zA-Z0-9.-]+$/.test(selection.selectedAudioId) ? selection.selectedAudioId.slice(0, 100) : null,
                 selectedBitrate: Number.isFinite(selection.selectedBitrate) && selection.selectedBitrate > 0 ? selection.selectedBitrate : null,
-                fallback: selection.fallback === true } : state.audioSelection;
-            await updateAAC(state.id, { audioSelection, progress: Number.isFinite(message.progress) ? Math.min(100, Math.max(0, message.progress)) : state.progress, phase: message.phase, error: typeof message.error === 'string' ? message.error.slice(0, 500) : undefined });
+                fallback: selection.fallback === true } : undefined;
+            await updateAAC(state.id, { ...(sourceDiscovery ? { sourceDiscovery } : {}), ...(audioSelection ? { audioSelection } : {}),
+                ...(Number.isFinite(message.progress) ? { progress: Math.min(100, Math.max(0, message.progress)) } : {}),
+                phase: message.phase, ...(typeof message.error === 'string' ? { error: message.error.slice(0, 500) } : {}) });
         }
         return { ok: true };
     })().then(respond, () => respond({ ok: false }));

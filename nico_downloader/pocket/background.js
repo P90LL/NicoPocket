@@ -1,5 +1,13 @@
 // Carries lightweight video information and explicit download requests.
 importScripts('title.js');
+// Compatibility preference is migrated, but acquisition never reads it for output selection.
+async function enforceM4AFormat() {
+    const values = await chrome.storage.local.get('downFile_setting');
+    if (values.downFile_setting !== 'm4a') await chrome.storage.local.set({ downFile_setting: 'm4a' });
+}
+void enforceM4AFormat();
+chrome.runtime.onInstalled.addListener(() => { void enforceM4AFormat(); });
+chrome.runtime.onStartup.addListener(() => { void enforceM4AFormat(); });
 let opening = Promise.resolve();
 async function openEditor(context, sourceTabId) {
     if (context) {
@@ -175,7 +183,7 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
             try {
                 await updateAAC(state.id, { phase: 'saving', saveUrl: message.url, saveReadyAt: Date.now(),
                     saveActivityAt: Date.now(), saveStatus: 'waiting', saveRequestCount: 1,
-                    savedFilename: message.filename, savedMime: message.mime });
+                    savedFilename: message.filename, savedMime: message.mime, savedExtension: '.m4a', saveCaller: 'pocket/save.js' });
                 const owners = (await chrome.storage.session.get('np:saveTargets'))['np:saveTargets'] || [];
                 await chrome.storage.session.set({ 'np:saveTargets': [...owners,
                     { id: state.id, owner: state.owner, url: message.url, filename: message.filename }].slice(-20) });

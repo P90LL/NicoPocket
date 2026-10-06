@@ -14,6 +14,11 @@ const parseArgs = (Core, args) => {
 
 // ffmpegの実行
 const ffmpeg = (Core, args) => {
+  if (!/^[a-zA-Z0-9]+\.m4a$/.test(args.at(-1))
+      || args[args.lastIndexOf('-f') + 1] !== 'mp4'
+      || args[args.lastIndexOf('-c:a') + 1] !== 'copy') {
+    throw new Error('M4A stream copy\u4ee5\u5916\u306e\u51fa\u529b\u306f\u8a31\u53ef\u3055\u308c\u3066\u3044\u307e\u305b\u3093\u3002');
+  }
   Core.ccall(
     "main",
     "number",
@@ -47,11 +52,15 @@ const runFFmpeg_m3u8 = async (
   });
 
   const job = NicoDownloader._nicoPocketJob;
+  if (mode !== 'm4a') return false;
   if (job?.outputOwner !== 'nicopocket' || !globalThis.NicoPocketAAC?.owns(job)) return false;
   // NicoPocket M4A: copy the existing audio stream directly into MP4.
   if (job.outputOwner === "nicopocket") {
     NicoDownloader.SetVideFormatByExtension("m4a");
-    NicoDownloader.FSOutputFileNameSet(Nicovideo);
+    if (!NicoDownloader.FSOutputFileNameSet(Nicovideo)
+        || NicoDownloader.FSOutputFileNameGet() !== job.videoId + '.m4a') {
+      throw new Error('M4A出力名を確認できませんでした。');
+    }
     // Reuse upstream tag names; values come from the editor's source context.
     const info = NicoDownloader._nicoPocketMetadata || {};
     const tags = NicoPocketMetadata.build(info);
@@ -91,22 +100,7 @@ const runFFmpeg_m3u8 = async (
  * @see https://developer.mozilla.org/ja/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Complete_list_of_MIME_types
  */
 function FiletypeToMimetype(filetype) {
-  switch (filetype) {
-    case "mp4":
-      return "video/mp4";
-    case "wav":
-      return "audio/wav";
-    case "mp3":
-      return "audio/mpeg";
-    case "webm":
-      return "video/webm";
-    case "aac":
-      return "audio/aac";
-    case "m4a":
-      return "audio/mp4";
-    default:
-      return "video/mp4";
-  }
+  return filetype === 'm4a' ? 'audio/mp4' : false;
 }
 
 //ここから追記
@@ -156,7 +150,7 @@ async function DownEncoder(NicoDownloader, m3u8s, Nicovideo) {
         outputJob.outputProduced = true;
         const path = NicoDownloader.FSOutputFileNameGet();
         try {
-          if (!path.endsWith('.m4a')) throw new Error('M4A出力名を確認できませんでした。');
+          if (path !== outputJob.videoId + '.m4a') throw new Error('M4A出力名を確認できませんでした。');
           file = core.FS.readFile(path);
           const blob = new Blob([file], { type: 'audio/mp4' });
           outputJob.onOutput(blob, outputJob.title + '.m4a');
@@ -355,6 +349,7 @@ async function Transcode(Core, m3u8name, NicoDownloader, Nicovideo) {
  */
 ////////////////////////////////////////////////////////////////////////
 function Option_setLoading(name) {
+  if (name === "downFile_setting") return "m4a";
 
   try {
     chrome.storage.local.get(name, function (value) {

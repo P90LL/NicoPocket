@@ -216,14 +216,10 @@ class NicoDownloaderClass {
      * @returns {String} 動画のダウンロード名(例：smID_title.mp4)
      */
     ////////////////////////////////////////////////////////////////////////
-    VideoDownloadNameMake(video_smID, video_title, video_type = "mp4") {
-        let ret = this.VideoDownloadNameArray;
-        ret = ret.replace("${NicoDownloaderClasssmID}", video_smID);
-        ret = ret.replace("${NicoDownloaderClasstitle}", video_title);
-
-        //拡張子をつける
-        ret = ret + "." + video_type;
-        return ret;
+    VideoDownloadNameMake(video_smID, video_title) {
+        const job = this._nicoPocketJob;
+        if (job?.outputOwner !== 'nicopocket') return false;
+        return NicoPocketTitle.normalize(job.title, video_smID) + '.m4a';
     }
 
     ////////////////////////////////////////////////////////////////////////
@@ -344,23 +340,7 @@ class NicoDownloaderClass {
      * false:失敗
     */
     ////////////////////////////////////////////////////////////////////////
-    ButtonFirstMake() {
-
-        let p_link = document.createElement("p");
-        p_link.id = VideoData.Video_DLlink.p;
-        p_link.className = VideoData.Video_DLlink.div_class;
-        let a_link = document.createElement("a");
-        a_link.innerText = "処理中";
-        a_link.id = VideoData.Video_DLlink.a;
-
-        //すでにあるなら追加しない
-        if (!document.getElementById(p_link.id)) {
-            document.getElementsByClassName(VideoData.Video_title_Element)[0].appendChild(p_link);
-            document.getElementsByClassName(VideoData.Video_title_Element)[0].querySelector("p").appendChild(a_link);
-        }
-
-        return true;
-    }
+    ButtonFirstMake() { return false; }
 
     ////////////////////////////////////////////////////////////////////////
     /**
@@ -382,10 +362,7 @@ class NicoDownloaderClass {
      * @returns {Boolean}
     */
     ////////////////////////////////////////////////////////////////////////
-    ButtonInnerHTMLWrite(innerHTML) {
-        document.getElementById(VideoData.Video_DLlink.a).innerHTML = innerHTML;
-        return true;
-    }
+    ButtonInnerHTMLWrite() { return false; }
 
     ////////////////////////////////////////////////////////////////////////
     /**
@@ -489,21 +466,7 @@ class NicoDownloaderClass {
      * @returns {String} SystemMessageAutoOpenのテキスト版
     */
     ////////////////////////////////////////////////////////////////////////
-    SystemMessageAutoOpenToText() {
-        const js =
-            "new Promise(function(r){document.querySelector(" +
-            JSON.stringify(VideoData.PlayerSettingQuery) + // "[aria-label=\"設定\"]" などが安全に入る
-            ").click();r();})" +
-            ".then(function(){(" + VideoData.SystemMessageButtonExpr + ")?.click();});";
-
-        // onclick=" ... " にそのまま入れるための完全なエスケープ
-        return js
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#39;");
-    }
+    SystemMessageAutoOpenToText() { return ''; }
 
     ////////////////////////////////////////////////////////////////////////
     /**
@@ -513,17 +476,7 @@ class NicoDownloaderClass {
      * @returns {String} HTML - 保存ボタンの中身(要初期設定)
     */
     ////////////////////////////////////////////////////////////////////////
-    SaveButtonInnerHTMLMake(video_name) {
-        if (this.Savemode == "0") {
-            // optionページのURLを取得
-            this.optionURL = chrome.runtime.getURL('options.html');
-
-            // 初期設定を促す
-            return VideoData.DLButton.a + " onclick=\'location.href=&quot;" + this.optionURL + "&quot;\' " + VideoData.DLButton.b + this.LangText("要初期設定") + "<a href=\"" + this.optionURL + "\"><br>" + this.LangText("設定画面を開く") + "</a>" + VideoData.DLButton.c;
-        }
-
-        return VideoData.DLButton.a + " onclick=\'" + this.SystemMessageAutoOpenToText() + "\' " + VideoData.DLButton.b + video_name + this.LangText("を保存") + VideoData.DLButton.c + "</p>";
-    }
+    SaveButtonInnerHTMLMake() { return ''; }
 
     ////////////////////////////////////////////////////////////////////////
     /**
@@ -533,11 +486,7 @@ class NicoDownloaderClass {
      * @returns {Boolean}
     */
     ////////////////////////////////////////////////////////////////////////
-    SaveButtonMake(video_name) {
-        const innerHTML = this.SaveButtonInnerHTMLMake(video_name);
-        this.ButtonInnerHTMLWrite(innerHTML);
-        return;
-    }
+    SaveButtonMake() { return false; }
 
     ////////////////////////////////////////////////////////////////////////
     /**
@@ -604,15 +553,7 @@ class NicoDownloaderClass {
      * @returns {Boolean}
     */
     ////////////////////////////////////////////////////////////////////////
-    DownloadLinkClick() {
-        if (document.getElementById(VideoData.Video_DLlink.a2) != null) {
-            //ダウンロードのタグがあればクリック
-            const link = document.getElementById(VideoData.Video_DLlink.a2);
-            link.click();
-            link.remove();
-            this.ButtonTextWrite(this.LangText("保存完了")); //ボタンの文字を変更
-        }
-    }
+    DownloadLinkClick() { return false; }
 
 
     ////////////////////////////////////////////////////////////////////////
@@ -792,7 +733,7 @@ class NicoDownloaderClass {
         */
     ////////////////////////////////////////////////////////////////////////
     SetVideoFormat(video_name) {
-        this.VideoFormat = this.GetFormatToString(video_name);
+        return this.SetVideFormatByExtension(String(video_name).endsWith('.m4a') ? 'm4a' : '');
     }
 
     ////////////////////////////////////////////////////////////////////////
@@ -803,8 +744,8 @@ class NicoDownloaderClass {
     */
     ////////////////////////////////////////////////////////////////////////
     SetVideFormatByExtension(extension) {
-        this.VideoFormat = extension;
-        return true;
+        this.VideoFormat = extension === 'm4a' ? 'm4a' : '';
+        return this.VideoFormat === 'm4a';
     }
 
     ////////////////////////////////////////////////////////////////////////
@@ -814,11 +755,7 @@ class NicoDownloaderClass {
      * @returns {Boolean} false VideoFormatがない場合
     */
     ////////////////////////////////////////////////////////////////////////
-    CheckVideoFormat() {
-        if (this.VideoFormat == null) return false;
-        if (this.VideoFormat == '') return false;
-        return this.VideoFormat;
-    }
+    CheckVideoFormat() { return this.VideoFormat === 'm4a' ? 'm4a' : false; }
 
     ////////////////////////////////////////////////////////////////
     /**
@@ -891,7 +828,12 @@ class NicoDownloaderClass {
     */
     ////////////////////////////////////////////////////////////////
     FSOutputFileNameSet(Nicovideo) {
-        this.FSOutputFileName = Nicovideo.video_sm + "." + this.CheckVideoFormat() || "mp4";
+        if (this.CheckVideoFormat() !== 'm4a' || !/^[a-zA-Z0-9]+$/.test(Nicovideo.video_sm)) {
+            this.FSOutputFileName = '';
+            return false;
+        }
+        this.FSOutputFileName = Nicovideo.video_sm + '.m4a';
+        return true;
     }
 
     ////////////////////////////////////////////////////////////////
@@ -911,7 +853,7 @@ class NicoDownloaderClass {
     */
     ////////////////////////////////////////////////////////////////
     FSOutputFileNameGet() {
-        return this.FSOutputFileName;
+        return /^[a-zA-Z0-9]+\.m4a$/.test(this.FSOutputFileName) ? this.FSOutputFileName : '';
     }
 }
 

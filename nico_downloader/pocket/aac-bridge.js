@@ -172,7 +172,7 @@
     // These wrappers apply only while a NicoPocket request is active.
     const option = Option_setLoading;
     Option_setLoading = function (name) {
-        if (active && name === 'downFile_setting') return 'm4a';
+        if (name === 'downFile_setting') return 'm4a';
         if (active && name === 'video_pattern') return active.videoId;
         if (active && name === 'video_hlssave' && (!localStorage.getItem(name) || ['undefined', '0'].includes(localStorage.getItem(name)))) return '1';
         return option(name);
@@ -369,24 +369,24 @@
             }
             const bytes = new Uint8Array(await blob.arrayBuffer());
             guard(job);
-            let reply = await chrome.runtime.sendMessage({ kind: 'np:m4a-transfer', stage: 'begin',
+            let reply = await chrome.runtime.sendMessage({ kind: 'np:m4a-transfer', owner: 'nicopocket', stage: 'begin',
                 jobId: job.id, filename, mime: blob.type, size: bytes.length });
             if (!reply?.ok) throw new Error(reply?.error || '保存ウィンドウへ接続できませんでした。');
             for (let offset = 0, index = 0; offset < bytes.length; offset += 65536, index++) {
                 guard(job);
-                reply = await chrome.runtime.sendMessage({ kind: 'np:m4a-transfer', stage: 'chunk',
+                reply = await chrome.runtime.sendMessage({ kind: 'np:m4a-transfer', owner: 'nicopocket', stage: 'chunk',
                     jobId: job.id, index, bytes: Array.from(bytes.subarray(offset, offset + 65536)) });
                 if (!reply?.ok) throw new Error('M4Aの転送に失敗しました。');
             }
             guard(job);
             job.saveDeadline = setTimeout(() => failed(job, '保存開始待ちがタイムアウトしました。Chromeの許可・保存先を確認して再試行してください。'), 60000);
-            reply = await chrome.runtime.sendMessage({ kind: 'np:m4a-transfer', stage: 'end', jobId: job.id });
+            reply = await chrome.runtime.sendMessage({ kind: 'np:m4a-transfer', owner: 'nicopocket', stage: 'end', jobId: job.id });
             if (!reply?.ok) throw new Error(reply?.error || 'M4Aの保存を開始できませんでした。');
 
         } catch (error) { failed(job, error.message || 'M4Aの保存開始に失敗しました。'); }
     }
     async function prepare(job) {
-        const values = await chrome.storage.local.get(['video_hlssave', 'video_pattern', 'language_setting', 'debug', 'downFile_setting']);
+        const values = await chrome.storage.local.get(['video_hlssave', 'video_pattern', 'language_setting', 'debug']);
         guard(job);
         for (const [key, value] of Object.entries(values)) if (value != null) localStorage.setItem(key, String(value));
         if (!values.video_hlssave || values.video_hlssave === '0') localStorage.setItem('video_hlssave', '1');

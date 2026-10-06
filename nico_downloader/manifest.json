@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "NicoPocket",
   "description": "nico_downloaderを基礎に、AAC音源のM4A化・メタデータ・アートワーク設定を行う個人用途のChrome拡張機能",
-  "version": "5.0.0.22",
+  "version": "5.0.0.23",
   "icons": {
     "16": "pocket/icons/icon-16.png",
     "32": "pocket/icons/icon-32.png",

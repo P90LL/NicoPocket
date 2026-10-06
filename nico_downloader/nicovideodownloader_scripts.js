@@ -34,16 +34,9 @@ async function VideoDown(request) {
         if (Nicovideo.video_sm == "" || Nicovideo.video_title == "")
             reject("video_sm or video_title is null");
 
-        // デフォルト動画ファイル名の定義
-        let downFile_setting = await downFile_get();
-        if (request && !request.isCurrent()) { reject(new Error('取得元動画が切り替わりました。')); return; }
-        DebugPrint("downFile_setting:" + downFile_setting); // 取得した値を表示
-
-        let video_name = NicoDownloader.VideoDownloadNameMake(
-            Nicovideo.video_sm,
-            Nicovideo.video_title,
-            downFile_setting
-        );
+        // Output names come only from the owned editor job, never legacy format preferences.
+        if (!request.isCurrent()) { reject(new Error('取得元動画が切り替わりました。')); return; }
+        const video_name = NicoDownloader.VideoDownloadNameMake(Nicovideo.video_sm, Nicovideo.video_title);
         Nicovideo.video_name = video_name;
         //DebugPrint("video_name:" + Nicovideo.video_name);
 
@@ -54,19 +47,6 @@ async function VideoDown(request) {
         resolve();
     });
     DebugPrint("video_name:" + Nicovideo.video_name);
-
-    // 非同期でdownFile_settingを取得する関数
-    function downFile_get() {
-        return new Promise((resolve, reject) => {
-            chrome.storage.local.get("downFile_setting", function (value) {
-                if (chrome.runtime.lastError) {
-                    reject(chrome.runtime.lastError);
-                } else {
-                    resolve(value.downFile_setting);
-                }
-            });
-        });
-    }
 
     //ダウンロードリンクの表示
     if (!NicoDownloader.VideoLoadedCheck(Nicovideo.video_sm)) {

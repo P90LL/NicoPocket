@@ -116,12 +116,12 @@ let intervalId;
 try {
     clearInterval(intervalId);
 
-    // 2秒ごとにVideoDownを実行
+    // Phase 1: 2秒ごとにNicoPocketの編集ボタンを配置
     intervalId = setInterval(() => {
         if (interval1st) {
             // 2回目以降は実行
             try {
-                VideoDown();
+                NicoPocketUI.placeButton();
             } catch (e) {
                 console.log(e);
             }

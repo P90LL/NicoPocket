@@ -28,6 +28,12 @@
     ],
     "content_scripts": [
         {
+            "matches": ["https://www.nicovideo.jp/*"],
+            "js": ["pocket/content.js"],
+            "css": ["pocket/content.css"],
+            "run_at": "document_start"
+        },
+        {
             "matches": [
                 "https://www.nicovideo.jp/*"
             ],
@@ -50,5 +56,8 @@
             ]
         }
     ],
+    "background": {
+        "service_worker": "pocket/background.js"
+    },
     "options_page": "options.html"
 }

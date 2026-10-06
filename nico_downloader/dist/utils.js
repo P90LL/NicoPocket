@@ -72,9 +72,12 @@ const runFFmpeg_m3u8 = async (
       const utf8 = Array.from(new TextEncoder().encode(text), byte => String.fromCharCode(byte)).join("");
       return ["-metadata", `${key}=${utf8}`];
     });
+    const artworkFile = NicoDownloader._nicoPocketJob?.artworkFile;
     const ffmpegArgs = [
       "-allowed_extensions", "ALL", "-i", m3u8name,
-      "-map", "0:a:0", "-vn", "-c:a", "copy",
+      ...(artworkFile ? ["-i", artworkFile] : []),
+      "-map", "0:a:0", "-c:a", "copy",
+      ...(artworkFile ? ["-map", "1:v:0", "-c:v", "copy", "-disposition:v:0", "attached_pic"] : ["-vn"]),
       "-map_metadata", "-1", "-map_metadata:s:a", "-1",
       "-map_chapters", "-1", ...metadataArgs, "-f", "mp4",
       NicoDownloader.FSOutputFileNameGet(),

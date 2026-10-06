@@ -7,10 +7,19 @@
     const notify = (job, phase, error) => chrome.runtime.sendMessage({
         kind: 'np:aac-event', jobId: job.id, phase, error
     }).catch(() => {});
+    function cleanupArtwork(job) {
+        if (!job.core || job.executing) return;
+        for (const path of [job.artworkFile, job.videoId + '.m4a']) {
+            if (path) try { job.core.FS.unlink(path); } catch { /* Already removed or never created. */ }
+        }
+        job.artworkFile = '';
+    }
     function stop(job, phase, error, report = true) {
         if (active !== job) return;
         active = null;
         job.controller.abort();
+        cleanupArtwork(job);
+        job.artwork = null;
         clearInterval(job.watch);
         clearTimeout(job.deadline);
         clearTimeout(job.saveDeadline);
@@ -22,7 +31,11 @@
     }
     const failed = (job, text) => stop(job, 'error', text);
     function guard(job) {
-        if (!sameSource(job)) throw new Error('取得元動画が切り替わりました。');
+        if (!sameSource(job)) {
+            const error = new Error('取得元動画が切り替わりました。');
+            error.nicoPocketJobId = job.id;
+            throw error;
+        }
     }
     // These wrappers apply only while a NicoPocket request is active.
     const option = Option_setLoading;
@@ -79,9 +92,26 @@
                 if (String(message).startsWith('FFMPEG_END')) void save(job);
             }
         });
+        job.core = core;
+        if (job.artwork) {
+            try {
+                const bytes = Uint8Array.from(job.artwork);
+                const picture = await createImageBitmap(new Blob([bytes], { type: 'image/jpeg' }));
+                const valid = picture.width === 768 && picture.height === 768;
+                picture.close(); guard(job);
+                if (!valid) throw new Error('Artworkのサイズが一致しません。');
+                job.artworkFile = 'np-artwork.jpg';
+                core.FS.writeFile(job.artworkFile, bytes);
+            } catch {
+                cleanupArtwork(job);
+                console.warn('NicoPocket: Artworkを読み込めないため画像なしで保存します。');
+            } finally { job.artwork = null; }
+        }
+        guard(job);
         const call = core.ccall;
         core.ccall = function (...args) {
             guard(job);
+            job.executing = args[0] === 'main';
             try {
                 const result = call.apply(this, args);
                 if (args[0] === 'main' && typeof result === 'number' && result !== 0) {
@@ -94,6 +124,9 @@
                 console.error('NicoPocket FFmpeg', error);
                 failed(job, 'FFmpeg処理に失敗しました。動画ページのログを確認してください。');
                 throw error;
+            } finally {
+                job.executing = false;
+                if (args[0] === 'main') cleanupArtwork(job);
             }
         };
         return core;
@@ -194,7 +227,7 @@
         if (active || message.videoId !== currentId() || location.origin !== 'https://www.nicovideo.jp') {
             respond({ ok: false, error: '処理中、または取得元動画が切り替わっています。' }); return;
         }
-        const job = { controller: new AbortController(), id: message.jobId, videoId: message.videoId, title: NicoPocketTitle.normalize(message.title, message.videoId), metadata: message.metadata || {} };
+        const job = { controller: new AbortController(), id: message.jobId, videoId: message.videoId, title: NicoPocketTitle.normalize(message.title, message.videoId), metadata: message.metadata || {}, artwork: Array.isArray(message.artwork) ? message.artwork : null };
         active = job;
         job.watch = setInterval(() => {
             if (!sameSource(job)) failed(job, '取得元動画が切り替わりました。現在の動画から開き直してください。');
@@ -204,6 +237,7 @@
         respond({ ok: true });
     });
     window.addEventListener('unhandledrejection', event => {
+        if (event.reason?.nicoPocketJobId && event.reason.nicoPocketJobId !== active?.id) return;
         if (active) {
             failed(active, '既存の取得処理でエラーが発生しました。動画ページのログを確認してください。');
             console.error('NicoPocket AAC', event.reason);

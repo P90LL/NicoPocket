@@ -27,7 +27,7 @@ const NicoPocketArtwork = (() => {
         image.alt = state?.edited ? '編集済みの正方形Artwork' : '現在の動画のサムネイル';
         pill.textContent = error ? '読み込み失敗' : loading ? '読み込み中' : state?.edited ? '編集済み' : bitmap ? '元画像' : '未設定';
         empty.textContent = error || (loading ? 'サムネイルを読み込んでいます…' : 'サムネイル未取得');
-        note.textContent = state?.edited ? '正方形Artworkの編集結果です。M4Aへの埋め込みは次Phaseです。' : '元のサムネイルです。1:1の正方形に編集できます。';
+        note.textContent = state?.edited ? '正方形Artworkの編集結果です。保存時にM4Aへ埋め込みます。' : '1:1の正方形に編集できます。未編集時はArtworkなしで保存します。';
         edit.disabled = !state?.thumbnailUrl || loading || exporting;
         original.disabled = !state?.edited || exporting;
     }

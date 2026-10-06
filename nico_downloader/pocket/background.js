@@ -94,6 +94,16 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
             const context = stored['np:videoContext'];
             if (!context || context.videoId !== message.videoId || context.sourceTabId !== message.sourceTabId
                 || context.sourceUrl !== message.sourceUrl) throw new Error('表示中の動画情報が変わりました。開き直してください。');
+            // JPEG bytes are forwarded for this request only, never stored in session state.
+            const candidate = message.artwork;
+            const bytes = candidate?.bytes;
+            const artwork = candidate && candidate.videoId === context.videoId
+                && candidate.sourceTabId === context.sourceTabId && candidate.sourceUrl === context.sourceUrl
+                && candidate.thumbnailUrl === context.thumbnailUrl && Array.isArray(bytes)
+                && bytes.length >= 4 && bytes.length <= 2 * 1024 * 1024
+                && bytes.every(value => Number.isInteger(value) && value >= 0 && value <= 255)
+                && bytes[0] === 255 && bytes[1] === 216 && bytes.at(-2) === 255 && bytes.at(-1) === 217
+                ? bytes : null;
             const state = { id: crypto.randomUUID(), phase: 'starting', videoId: context.videoId,
                 sourceTabId: context.sourceTabId, title: NicoPocketTitle.normalize(message.title, context.videoId), startedAt: Date.now(),
                 metadata: { uploader: context.uploader, sourceUrl: context.sourceUrl,
@@ -102,7 +112,7 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
             try {
                 // Receiver verifies the current watch ID again immediately before execution.
                 const reply = await chrome.tabs.sendMessage(context.sourceTabId, {
-                    kind: 'np:aac-run', jobId: state.id, videoId: context.videoId, title: state.title, metadata: state.metadata
+                    kind: 'np:aac-run', jobId: state.id, videoId: context.videoId, title: state.title, metadata: state.metadata, artwork
                 }, { frameId: 0 });
                 if (!reply?.ok) throw new Error(reply?.error || '取得元タブでAAC処理を開始できませんでした。');
                 return { ok: true, jobId: state.id };

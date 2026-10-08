@@ -338,9 +338,10 @@
                 applied = true;
             }
         }
+        job.audioSelection = { requestedQuality: job.requestedQuality, selectedAudioId: applied ? selected.id : null,
+            selectedBitrate: applied ? selected.bitrate : null, fallback: !applied };
         void chrome.runtime.sendMessage({ kind: 'np:aac-event', jobId: job.id, phase: 'acquiring',
-            audioSelection: { requestedQuality: job.requestedQuality, selectedAudioId: applied ? selected.id : null,
-                selectedBitrate: applied ? selected.bitrate : null, fallback: !applied } }).catch(() => {});
+            audioSelection: job.audioSelection }).catch(() => {});
         return result;
     };
     const movie = MovieDownload_domand;

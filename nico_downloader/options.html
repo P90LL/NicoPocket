@@ -1,9 +1,17 @@
 <!doctype html>
-<html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>NicoPocket — 使い方</title><link rel="stylesheet" href="pocket/about.css"><script src="pocket/about.js" defer></script></head>
+<html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>NicoPocket — 使い方</title><link rel="stylesheet" href="pocket/about.css"><script src="pocket/about.js" defer></script><script src="pocket/metadata-presets.js" defer></script><script src="pocket/presets-settings.js" defer></script></head>
 <body><main><header><img src="pocket/logo.svg" width="48" height="48" alt=""><div><h1>NicoPocket</h1><p id="version"></p></div></header>
 <p>個人利用・ローカルインストール向けのM4A保存ツールです。</p>
 <h2>使い方</h2><ol><li>ニコニコ動画の動画ページを開き、動画を再生します。</li><li>「NicoPocketで保存」から編集画面を開きます。</li><li>保存タイトル・Artwork・音質・Metadataを確認します。</li><li>Downloadを押してM4Aを保存します。</li></ol>
-<h2>保存と音質</h2><p>保存形式はM4Aです。標準音質は192 kbps以下の最高品質、高音質は取得可能な最高品質を使います。192 kbps以下がない場合も元音源のまま保存し、音声は再エンコードしません。</p>
+<section id="metadata-presets" aria-labelledby="preset-heading">
+<h2 id="preset-heading">Metadata Presets</h2>
+<p>Artist・Album Artist・Genre・Series / Albumのよく使う値を登録できます。登録順に表示します。</p>
+<div id="preset-groups"></div>
+<div class="preset-backup"><button id="preset-export" type="button">プリセットを書き出す</button><button id="preset-import" type="button">プリセットを読み込む</button><input id="preset-import-file" type="file" accept=".json,application/json" hidden /></div>
+<p class="note">JSONはversion 2形式です。旧version 1も移行して読み込めます。読み込みは確認後に全置換します。1項目は4000文字以内の1行、各種類1000件まで、ファイルは1 MB以内です。</p>
+<p id="preset-status" role="status"></p>
+</section>
+<h2>保存と音質</h2><p>保存形式はM4Aです。標準音質は192 kbps以下の最高品質、高音質は取得可能な最高品質を使います。標準音質で取得音源が192 kbpsを超える場合だけ192 kbpsへ再エンコードします。192 kbps以下と高音質は元音源を維持します。</p>
 <h2>保存が進まないとき</h2><p>Chromeのダウンロード許可や保存先ダイアログを確認してください。待機中は編集画面からキャンセルできます。中断後はページをリロードせず再試行できます。</p>
 <p>更新前から残っている保存要求はChrome側で手動キャンセルしてください。拡張機能を再読み込みした後は動画ページも再読み込みしてください。</p>
 <h2>Artwork</h2><p>未編集時もサムネイルの中央を1:1でクロップした768×768 JPEGを埋め込みます。ドラッグ・Zoomで変更できます。画像取得・生成失敗時のみArtworkなしで保存します。</p>

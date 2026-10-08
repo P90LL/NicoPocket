@@ -17,7 +17,7 @@ const NicoPocketUI = (() => {
         if (!blocker) {
             blocker = document.createElement('div');
             blocker.setAttribute('role', 'status');
-            blocker.textContent = 'NicoPocketでArtworkを編集中です';
+            blocker.textContent = 'NicoPocketで編集中です';
             blocker.style.cssText = 'position:fixed;inset:0;z-index:2147483647;display:grid;place-items:center;background:#11172299;color:#edf2fa;pointer-events:auto;touch-action:none;';
             document.body.append(blocker);
         }

@@ -1,5 +1,5 @@
 // Carries lightweight video information and explicit download requests.
-importScripts('title.js');
+importScripts('title.js', 'metadata.js');
 // Compatibility preference is migrated, but acquisition never reads it for output selection.
 async function enforceM4AFormat() {
     const values = await chrome.storage.local.get('downFile_setting');
@@ -150,7 +150,8 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
                 requestedQuality: message.quality === 'high' ? 'high' : 'standard',
                 sourceTabId: context.sourceTabId, title: NicoPocketTitle.normalize(message.title, context.videoId), startedAt: Date.now(),
                 metadata: { uploader: context.uploader, sourceUrl: context.sourceUrl,
-                    genre: context.genre, series: context.series, registeredAt: context.registeredAt } };
+                    genre: context.genre, series: context.series, registeredAt: context.registeredAt,
+                    metadataEdits: NicoPocketMetadata.normalizeEdits(message.metadataEdits) } };
             await chrome.storage.session.set({ 'np:aacJob': state });
             try {
                 // Receiver verifies the current watch ID again immediately before execution.

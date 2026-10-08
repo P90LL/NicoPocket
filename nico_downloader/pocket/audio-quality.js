@@ -1,5 +1,10 @@
-// Select existing renditions only; never infer audio bitrate from variant BANDWIDTH.
+// Select existing renditions; cap known higher-bitrate standard audio only.
+// Never infer audio bitrate from variant BANDWIDTH.
 globalThis.NicoPocketAudioQuality = {
+    outputArgs(requested, bitrate) {
+        return requested === 'standard' && Number.isFinite(bitrate) && bitrate > 192
+            ? ['-c:a', 'aac', '-b:a', '192k', '-profile:a', 'aac_low'] : ['-c:a', 'copy'];
+    },
     select(renditions, qualities, requested) {
         const candidates = renditions.filter(item => item.TYPE === 'AUDIO' && typeof item.URI === 'string');
         if (!candidates.length) return null;

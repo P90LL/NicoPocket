@@ -6,11 +6,11 @@
 
 ## About
 
-[masteralice3104/nico_downloader](https://github.com/masteralice3104/nico_downloader)の動画情報・HLS/CMAF取得と同梱FFmpegを基礎にしています。音声は再エンコードせず、既存AACをM4Aコンテナへ格納します。
+[masteralice3104/nico_downloader](https://github.com/masteralice3104/nico_downloader)の動画情報・HLS/CMAF取得と同梱FFmpegを基礎にしています。高音質と192 kbps以下の音声は既存AACをM4Aへそのまま格納します。標準音質で取得音源が192 kbpsを超える場合はAAC 192 kbpsへ再エンコードします。
 
 ```text
 動画ページ → NicoPocket編集 → Download
-→ 既存音声取得 → AAC stream copy
+→ 既存音声取得 → 音声コピーまたは標準音質の192 kbps化
 → Metadata・Artwork付きM4A → 編集タイトル.m4a
 ```
 
@@ -21,7 +21,7 @@
 - [x] タイトル編集・禁則文字の正規化
 - [x] 1:1固定Artworkクロップ・ドラッグ・ズーム・リセット
 - [x] 標準音質 / 高音質の入力ストリーム選択
-- [x] AAC取得と再エンコードなしのM4A remux
+- [x] AAC取得・M4A remuxと標準音質の192 kbps上限化
 - [x] Metadata・JPEG Artwork埋め込み
 - [x] Metadataの保存前プレビュー・編集
 - [x] Metadataプリセットの追加・編集・削除とJSONバックアップ
@@ -47,7 +47,7 @@ PNGも同梱FFmpegで格納・音声コピー・Metadata・画像バイト一致
 
 ### Audio
 
-FFmpegの`-c:a copy`を使用します。ビットレートを上げる処理や192 kbpsへの強制再エンコードは行いません。最終保存はM4A、Blob MIME typeは`audio/mp4`です。AACやJPEGの中間ファイルは保存しません。
+高音質、標準音質の192 kbps以下、入力品質不明時はFFmpegの`-c:a copy`を使用します。標準音質で取得する入力が192 kbpsを超える場合だけ、同梱FFmpegの`-c:a aac -b:a 192k -profile:a aac_low`でAAC-LCへ再エンコードします。ビットレートを上げる処理は行いません。192 kbpsはエンコードの目標値で、実測平均値は音声内容・長さによって変わります。最終保存はM4A、Blob MIME typeは`audio/mp4`です。AACやJPEGの中間ファイルは保存しません。
 
 ### Audio Quality
 
@@ -58,10 +58,10 @@ FFmpegの`-c:a copy`を使用します。ビットレートを上げる処理や
 | 128 kbps | 128 | 128 |
 | 128 / 192 | 192 | 192 |
 | 128 / 192 / 256 | 192 | 256 |
-| 256のみ | 256 | 256 |
+| 256のみ | 192へ再エンコード | 256のまま |
 | 品質不明 | 既存の既定取得 | 既存の既定取得 |
 
-標準は192 kbps以下の最高品質、該当候補がない場合は既存候補の最高品質をそのまま使用します。高音質は最高bitrateです。品質IDに明示されたkbpsを利用し、不明な値は推測しません。
+標準は192 kbps以下の最高品質を優先します。該当候補がなく192 kbps超を取得する場合は192 kbpsへ再エンコードします。高音質は最高bitrateを取得し、そのまま保存します。品質IDに明示されたkbpsを利用し、不明な値は推測せず従来の取得・音声コピーへ戻します。今回の仕様変更と検証は[PHASE11_AUDIO_192K.md](docs/development/PHASE11_AUDIO_192K.md)に記録しています。
 
 ### Metadata
 

@@ -40,7 +40,7 @@ function render(context) {
     document.getElementById('video-status').textContent = context.incomplete
         ? '一部の動画情報を取得できませんでした。動画ページから再度開いてください。'
         : '現在の動画情報を読み込みました。';
-    document.getElementById('audio-info').textContent = '標準音質は192 kbps以下の最高品質、高音質は最高品質を使用します。192 kbps以下がない場合も元音源のまま保存します。';
+    document.getElementById('audio-info').textContent = '標準音質は192 kbps以下を優先し、取得音源が192 kbpsを超える場合は192 kbpsへ再エンコードします。高音質は元音源をそのまま保存します。';
     NicoPocketArtwork.setContext(context, NicoPocketEditor);
 }
 titleInput.addEventListener('input', () => { NicoPocketEditor.title = titleInput.value; renderMetadata(); });
@@ -83,7 +83,7 @@ function syncAACButton() {
     renderMetadata();
     document.getElementById('save-status').textContent = aacState?.phase === 'error'
         ? aacState.error || '処理に失敗しました。再度実行できます。'
-        : labels[aacState?.phase] || '選択した音質を再エンコードせずM4Aとして保存します。';
+        : labels[aacState?.phase] || '選択した音質でMetadata・Artwork付きM4Aを保存します。';
 }
 async function artworkForDownload(context) {
     await NicoPocketArtwork.ready(context);

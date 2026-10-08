@@ -16,8 +16,11 @@ const parseArgs = (Core, args) => {
 const ffmpeg = (Core, args) => {
   if (!/^[a-zA-Z0-9]+\.m4a$/.test(args.at(-1))
       || args[args.lastIndexOf('-f') + 1] !== 'mp4'
-      || args[args.lastIndexOf('-c:a') + 1] !== 'copy') {
-    throw new Error('M4A stream copy\u4ee5\u5916\u306e\u51fa\u529b\u306f\u8a31\u53ef\u3055\u308c\u3066\u3044\u307e\u305b\u3093\u3002');
+      || !(args[args.lastIndexOf('-c:a') + 1] === 'copy'
+          || (args[args.lastIndexOf('-c:a') + 1] === 'aac'
+              && args[args.lastIndexOf('-b:a') + 1] === '192k'
+              && args[args.lastIndexOf('-profile:a') + 1] === 'aac_low'))) {
+    throw new Error('M4A / AAC 192 kbps\u4ee5\u5916\u306e\u51fa\u529b\u306f\u8a31\u53ef\u3055\u308c\u3066\u3044\u307e\u305b\u3093\u3002');
   }
   Core.ccall(
     "main",
@@ -54,7 +57,7 @@ const runFFmpeg_m3u8 = async (
   const job = NicoDownloader._nicoPocketJob;
   if (mode !== 'm4a') return false;
   if (job?.outputOwner !== 'nicopocket' || !globalThis.NicoPocketAAC?.owns(job)) return false;
-  // NicoPocket M4A: copy the existing audio stream directly into MP4.
+  // NicoPocket M4A: copy audio, or cap known higher-bitrate standard audio at 192 kbps.
   if (job.outputOwner === "nicopocket") {
     NicoDownloader.SetVideFormatByExtension("m4a");
     if (!NicoDownloader.FSOutputFileNameSet(Nicovideo)
@@ -76,7 +79,7 @@ const runFFmpeg_m3u8 = async (
     const ffmpegArgs = [
       "-allowed_extensions", "ALL", "-i", m3u8name,
       ...(artworkFile ? ["-i", artworkFile] : []),
-      "-map", "0:a:0", "-c:a", "copy",
+      "-map", "0:a:0", ...NicoPocketAudioQuality.outputArgs(job.requestedQuality, job.audioSelection?.selectedBitrate),
       ...(artworkFile ? ["-map", "1:v:0", "-c:v", "copy", "-disposition:v:0", "attached_pic"] : ["-vn"]),
       "-map_metadata", "-1", "-map_metadata:s:a", "-1",
       "-map_chapters", "-1", ...metadataArgs, "-f", "mp4",

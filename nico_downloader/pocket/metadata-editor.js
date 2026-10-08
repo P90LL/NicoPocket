@@ -123,8 +123,9 @@
     async function refreshPresets() {
         const version = ++presetSequence;
         try {
-            const presets = await NicoPocketPresets.load();
+            const { presets, catalogUnavailable } = await NicoPocketPresets.selectionPresets();
             if (version !== presetSequence) return;
+            presetStatus.textContent = catalogUnavailable ? '音声合成キャラクターのプリセットを読み込めませんでした。登録済みプリセットと手入力は利用できます。' : '';
             genrePresets = presets.genres; renderGenre();
             availablePresets = presets;
             for (const key of Object.keys(presetFields)) {

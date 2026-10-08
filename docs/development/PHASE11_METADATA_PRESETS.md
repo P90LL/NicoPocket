@@ -2,6 +2,8 @@
 
 > この記録は初期のversion 1実装時点。Genreの現行仕様・version 2・旧設定移行は[PHASE11_METADATA_GENRE.md](PHASE11_METADATA_GENRE.md)を参照。Artist、Album Artist、Albumの操作仕様は維持している。
 
+> 現行の選択UIは[PHASE11_PRESET_PICKER.md](PHASE11_PRESET_PICKER.md)、同梱キャラクター候補は[PHASE11_METADATA_CHARACTER_PRESETS.md](PHASE11_METADATA_CHARACTER_PRESETS.md)を参照。
+
 ## 範囲
 
 作業ブランチは`codex/feature/metadata-edit`、基準は`nico-pocket-main`。既存のMetadata編集へ入力補助と設定管理を追加した。コミット・プッシュは実行していない。

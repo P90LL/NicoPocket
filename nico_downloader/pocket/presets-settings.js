@@ -16,7 +16,8 @@
         try {
             // Reload before each mutation rather than overwriting with an old rendered snapshot.
             const current = await NicoPocketPresets.load();
-            change(current);
+            const { presets: choices } = await NicoPocketPresets.selectionPresets(current);
+            change(current, choices);
             await NicoPocketPresets.save(current);
             message('プリセットを保存しました。');
         } catch { message('保存できませんでした。入力・重複・登録状態を確認してください。', true); }
@@ -28,6 +29,18 @@
         return value;
     }
     const values = (presets, key) => key === 'genres' ? presets.genres.custom : presets[key];
+    function removeChoice(current, key, value) {
+        const list = values(current, key), index = list.indexOf(value);
+        if (index >= 0) list.splice(index, 1);
+        if (['artists', 'albumArtists'].includes(key) && NicoPocketPresets.artistCatalog?.includes(value)) {
+            current.excludedArtists ||= { artists: [], albumArtists: [] };
+            if (!current.excludedArtists[key].includes(value)) current.excludedArtists[key].push(value);
+        }
+    }
+    function restoreChoice(current, key, value) {
+        const list = current.excludedArtists?.[key];
+        if (list) current.excludedArtists[key] = list.filter(item => item !== value);
+    }
     function render(presets) {
         host.replaceChildren();
         for (const [key, label] of Object.entries(NicoPocketPresets.groups)) {
@@ -68,16 +81,20 @@
                     form.append(input, apply, cancel); row.replaceChildren(form); input.focus();
                     form.addEventListener('submit', event => {
                         event.preventDefault();
-                        void update(current => {
-                            const next = valueFrom(input), index = values(current, key).indexOf(value);
-                            if (index < 0 || (next !== value && values(current, key).includes(next))) throw new Error('duplicate or changed');
-                            values(current, key)[index] = next;
+                        void update((current, choices) => {
+                            const next = valueFrom(input), list = values(current, key), index = list.indexOf(value);
+                            if (!values(choices, key).includes(value) || (next !== value && values(choices, key).includes(next))) throw new Error('duplicate or changed');
+                            if (next === value) return;
+                            if (index >= 0) list[index] = next; else list.push(next);
+                            // Renaming a bundled item hides its old name in this group only.
+                            removeChoice(current, key, value);
+                            restoreChoice(current, key, next);
                         });
                     });
                 });
                 remove.addEventListener('click', () => {
                     if (!confirm(label + 'のこのプリセットを削除しますか？')) return;
-                    void update(current => { const list = values(current, key), index = list.indexOf(value); if (index >= 0) list.splice(index, 1); });
+                    void update(current => removeChoice(current, key, value));
                 });
                 row.append(text, edit, remove); list.append(row);
             }
@@ -87,7 +104,7 @@
             const add = document.createElement('button'); add.type = 'submit'; add.textContent = '＋ 追加';
             form.addEventListener('submit', event => {
                 event.preventDefault();
-                void update(current => { const value = valueFrom(input); if (values(current, key).includes(value)) throw new Error('duplicate'); values(current, key).push(value); });
+                void update((current, choices) => { const value = valueFrom(input); if (values(choices, key).includes(value)) throw new Error('duplicate'); values(current, key).push(value); restoreChoice(current, key, value); });
             });
             form.append(input, add); section.append(list, form); host.append(section);
         }
@@ -95,7 +112,12 @@
     }
     async function refresh() {
         const version = ++sequence;
-        try { const presets = await NicoPocketPresets.load(); if (version === sequence) render(presets); }
+        try {
+            const { presets, catalogUnavailable } = await NicoPocketPresets.selectionPresets();
+            if (version !== sequence) return;
+            render(presets);
+            if (catalogUnavailable) message('共通キャラクタープリセットを読み込めませんでした。登録済みの一覧と追加欄は利用できます。', true);
+        }
         catch { message('プリセットを読み込めませんでした。バックアップ内容を確認してください。', true); }
     }
     document.getElementById('preset-export').addEventListener('click', async () => {

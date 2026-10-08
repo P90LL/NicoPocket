@@ -130,7 +130,7 @@ function renderMetadata() {
     target.replaceChildren();
     if (!context) return;
     const tags = NicoPocketMetadata.build({ ...context, metadataEdits: NicoPocketEditor.metadataEdits, title: NicoPocketTitle.normalize(NicoPocketEditor.title, context.videoId) });
-    const labels = { title: 'Title', artist: 'Artist', episode_id: 'Video ID', comment: 'Video URL', genre: 'Genre', album: 'Series / Album', album_artist: 'Album Artist', date: 'Date', creation_time: 'Creation Time' };
+    const labels = { title: 'Title', artist: 'Artist', episode_id: 'Video ID', comment: 'Video URL', keywords: 'Tags', genre: 'Genre', album: 'Series / Album', album_artist: 'Album Artist', date: 'Date', creation_time: 'Creation Time' };
     const values = { ...tags, artwork: NicoPocketEditor.artwork?.blob ? '768 × 768 JPEG' : 'なし（画像の取得・生成失敗時）' };
     for (const [key, value] of Object.entries(values)) {
         const row = document.createElement('div'), term = document.createElement('dt'), description = document.createElement('dd');

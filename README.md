@@ -73,6 +73,7 @@ UIとFFmpegが同じ生成関数を使用します。取得できた項目だけ
 | Artist | 投稿者`artist` |
 | Video ID | `episode_id` |
 | Video URL | `comment` |
+| Tags | 取得した動画タグを `, ` 区切りで保存する`keywords`（自動取得・編集不可） |
 | Genre | `genre` |
 | Series / Album | `album`、取得できる場合の`album_artist` |
 | Date | 有効な投稿日時の`date` / `creation_time` |

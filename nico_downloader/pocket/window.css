@@ -132,10 +132,17 @@ main { width: min(1120px, 100%); padding: 40px clamp(22px, 5vw, 64px) 70px; marg
 
 .metadata-field { min-width: 0; }
 .preset-hint { color: var(--muted); font-size: .8rem; margin: 8px 0 5px; }
-.preset-chips { display: flex; flex-wrap: wrap; gap: 6px; max-height: 180px; overflow: auto; overscroll-behavior: contain; }
-.preset-chips button { min-width: 0; max-width: 100%; border: 1px solid var(--line); border-radius: 999px; padding: 5px 10px; background: var(--surface-soft); color: var(--text); overflow-wrap: anywhere; text-align: left; font-size: .85rem; }
-.preset-chips button:hover { border-color: var(--blue); }
-.preset-chips .preset-empty { color: var(--muted); font-size: .8rem; }
+.preset-picker-button { width: 100%; text-align: left; margin-top: 4px; }
+#metadata-preset-dialog { width: min(600px, calc(100vw - 40px)); max-height: calc(100dvh - 40px); overflow: auto; overscroll-behavior: contain; padding: 28px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); color: var(--text); box-shadow: 0 24px 70px #0006; }
+#metadata-preset-dialog::backdrop { background: #0c152499; backdrop-filter: blur(3px); }
+#metadata-preset-search { width: 100%; min-width: 0; margin: 8px 0 16px; }
+.preset-selection-list { height: min(360px, 42dvh); overflow: auto; overscroll-behavior: contain; border: 1px solid var(--line); border-radius: 9px; padding: 6px; }
+.preset-choice { display: flex; flex-direction: row; align-items: center; gap: 12px; padding: 12px; border-radius: 7px; cursor: pointer; }
+.preset-choice:has(input:checked) { background: var(--surface-soft); }
+.preset-choice:hover { background: var(--surface-soft); }
+.preset-choice input { flex: 0 0 auto; width: 18px; height: 18px; margin: 0; accent-color: var(--blue); }
+.preset-choice span { min-width: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+@media (max-width: 640px) { #metadata-preset-dialog { width: calc(100vw - 20px); padding: 16px; } }
 
 #metadata-genre-select { width: 100%; min-width: 0; }
 #metadata-genre { margin-top: 8px; width: 100%; min-width: 0; }

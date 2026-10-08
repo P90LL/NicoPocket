@@ -26,3 +26,6 @@ a { color: #91bcff; }
 #metadata-presets .genre-builtins input { min-height: 0; width: 18px; height: 18px; flex: none; accent-color: #6da6ff; }
 .preset-group h4 { color: #a7b2c3; margin: 12px 0 8px; }
 @media (max-width: 400px) { .genre-builtins { grid-template-columns: 1fr; } }
+
+/* Keep long preset lists compact; the existing add field remains below. */
+.preset-list { max-height: 360px; overflow-y: auto; overscroll-behavior: contain; padding-right: 6px; }

@@ -45,6 +45,11 @@ const NicoPocketPresets = {
         const custom = this.list(genres.custom);
         if (custom.some(label => this.builtins.some(item => item.label === label))) throw new Error('追加ジャンルは標準ジャンルと異なる名前にしてください。');
         result.genres = { enabledBuiltins, custom };
+        if (Object.hasOwn(data, 'excludedArtists')) {
+            const excluded = data.excludedArtists;
+            if (!excluded || typeof excluded !== 'object' || Array.isArray(excluded)) throw new Error('除外プリセットの形式を確認してください。');
+            result.excludedArtists = { artists: this.list(excluded.artists), albumArtists: this.list(excluded.albumArtists) };
+        }
         return result;
     },
     parse(text) {
@@ -79,12 +84,15 @@ const NicoPocketPresets = {
         this.artistCatalog = Object.freeze(artists);
         return this.artistCatalog;
     },
-    async selectionPresets() {
-        const presets = await this.load();
+    async selectionPresets(stored) {
+        const presets = this.normalize(stored || await this.load());
         // Bundled choices supplement user presets without overwriting storage or backups.
         try {
             const artists = await this.loadArtistCatalog();
-            for (const key of ['artists', 'albumArtists']) presets[key] = [...new Set([...presets[key], ...artists])];
+            for (const key of ['artists', 'albumArtists']) {
+                const excluded = new Set(presets.excludedArtists?.[key] || []);
+                presets[key] = [...new Set([...presets[key], ...artists.filter(value => !excluded.has(value))])];
+            }
             return { presets, catalogUnavailable: false };
         } catch { return { presets, catalogUnavailable: true }; }
     },

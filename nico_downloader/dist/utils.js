@@ -2,8 +2,6 @@
 //をもとに改造したもの
 //LGPL
 
-let last_save_sm = "";
-
 const parseArgs = (Core, args) => {
   const argsPtr = Core._malloc(args.length * Uint32Array.BYTES_PER_ELEMENT);
   args.forEach((s, idx) => {
@@ -16,6 +14,11 @@ const parseArgs = (Core, args) => {
 
 // ffmpegの実行
 const ffmpeg = (Core, args) => {
+  if (!/^[a-zA-Z0-9]+\.m4a$/.test(args.at(-1))
+      || args[args.lastIndexOf('-f') + 1] !== 'mp4'
+      || args[args.lastIndexOf('-c:a') + 1] !== 'copy') {
+    throw new Error('M4A stream copy\u4ee5\u5916\u306e\u51fa\u529b\u306f\u8a31\u53ef\u3055\u308c\u3066\u3044\u307e\u305b\u3093\u3002');
+  }
   Core.ccall(
     "main",
     "number",
@@ -39,7 +42,7 @@ const runFFmpeg_m3u8 = async (
   m3u8name,
   NicoDownloader,
   Nicovideo,
-  mode = "mp4"//デフォルトはmp4
+  mode = "m4a" // Output ownership determines the format.
 ) => {
   let resolve = null;
 
@@ -48,104 +51,44 @@ const runFFmpeg_m3u8 = async (
     resolve = r;
   });
 
-  //終了時にresolve
-  try {
-    //日本語が入っているとタグが変になるのでエンコード
-    //unescapeは非推奨だが見なかったことにする
-    const title_str = unescape(encodeURIComponent(Nicovideo.video_title));
-    const timestamp_str = unescape(
-      encodeURIComponent(Nicovideo.video_registeredAt)
-    );
-    const username_str = unescape(encodeURIComponent(Nicovideo.video_owner));
-    const description_str = unescape(
-      encodeURIComponent(Nicovideo.video_description)
-    );
-
-    // ジャンルとシリーズは日本語が入っているとエラーになるのでエンコード
-    //unescapeは非推奨だが見なかったことにする
-    const genre_str = unescape(encodeURIComponent(Nicovideo.video_genre));
-    const series_str = unescape(encodeURIComponent(Nicovideo.video_series));
-
-    //拡張子を設定
-    NicoDownloader.SetVideFormatByExtension(mode);
-
-    // 出力ファイル名を設定
-    NicoDownloader.FSOutputFileNameSet(Nicovideo);
-    const outputFileName = NicoDownloader.FSOutputFileNameGet();
-
-    DebugPrint(`OutputFileName: ${outputFileName}`);
-
-    console.log("=== FFmpeg変換開始 ===");
-    console.log(`入力ファイル: ${m3u8name}`);
-    console.log(`出力ファイル: ${outputFileName}`);
-    console.log(`変換モード: ${mode}`);
-
-    //ffmpeg実行
-    ffmpeg(Core, [
-      "-allowed_extensions",
-      "ALL",
-      "-i",
-      m3u8name,
-      "-metadata",
-      `title=${title_str}`, // タイトル
-      "-metadata",
-      `show=${title_str}`, // タイトル
-      "-metadata",
-      `creation_time=${timestamp_str}`, // 登録日時
-      "-metadata",
-      `date=${timestamp_str}`, // 登録日時
-      "-metadata",
-      `artist=${username_str}`, // 投稿ユーザ
-      "-metadata",
-      `description=${description_str}`, // 説明
-      "-metadata",
-      `comment=${description_str}`, // 説明
-      "-metadata",
-      `genre=${genre_str}`, // ジャンル
-      "-metadata",
-      `publisher=nicovideo.jp`, // パブリッシャ
-      "-metadata",
-      `episode_id=${Nicovideo.video_sm}`, // 動画ID
-      "-metadata",
-      `album=${series_str}`, // シリーズ
-      "-metadata",
-      `album_artist=${username_str}`, // 投稿ユーザ
-      ...(mode === "aac"
-        ? ["-vn", "-c:a", "copy"] // aacモードで最初のオーディオストリームを選択
-        : ["-c", "copy"]), // MP4モードでオーディオ・ビデオをコピー
-      outputFileName,
-    ]);
-
-    // FFmpegコマンドの引数をログ出力
+  const job = NicoDownloader._nicoPocketJob;
+  if (mode !== 'm4a') return false;
+  if (job?.outputOwner !== 'nicopocket' || !globalThis.NicoPocketAAC?.owns(job)) return false;
+  // NicoPocket M4A: copy the existing audio stream directly into MP4.
+  if (job.outputOwner === "nicopocket") {
+    NicoDownloader.SetVideFormatByExtension("m4a");
+    if (!NicoDownloader.FSOutputFileNameSet(Nicovideo)
+        || NicoDownloader.FSOutputFileNameGet() !== job.videoId + '.m4a') {
+      throw new Error('M4A出力名を確認できませんでした。');
+    }
+    // Reuse upstream tag names; values come from the editor's source context.
+    const info = NicoDownloader._nicoPocketMetadata || {};
+    const tags = NicoPocketMetadata.build(info);
+    const metadataArgs = Object.entries(tags).flatMap(([key, value]) => {
+      if (typeof value !== "string") return [];
+      const text = value.replace(/[\u0000-\u001f\u007f]/g, " ").trim();
+      if (!text) return [];
+      // parseArgs uses writeAsciiToMemory: pass UTF-8 bytes, as upstream does.
+      const utf8 = Array.from(new TextEncoder().encode(text), byte => String.fromCharCode(byte)).join("");
+      return ["-metadata", `${key}=${utf8}`];
+    });
+    const artworkFile = NicoDownloader._nicoPocketJob?.artworkFile;
     const ffmpegArgs = [
       "-allowed_extensions", "ALL", "-i", m3u8name,
-      "-metadata", `title=${title_str}`,
-      "-metadata", `show=${title_str}`,
-      "-metadata", `creation_time=${timestamp_str}`,
-      "-metadata", `date=${timestamp_str}`,
-      "-metadata", `artist=${username_str}`,
-      "-metadata", `description=${description_str}`,
-      "-metadata", `comment=${description_str}`,
-      "-metadata", `genre=${genre_str}`,
-      "-metadata", `publisher=nicovideo.jp`,
-      "-metadata", `episode_id=${Nicovideo.video_sm}`,
-      "-metadata", `album=${series_str}`,
-      "-metadata", `album_artist=${username_str}`,
-      ...(mode === "aac" ? ["-vn", "-c:a", "copy"] : ["-c", "copy"]),
-      outputFileName
+      ...(artworkFile ? ["-i", artworkFile] : []),
+      "-map", "0:a:0", "-c:a", "copy",
+      ...(artworkFile ? ["-map", "1:v:0", "-c:v", "copy", "-disposition:v:0", "attached_pic"] : ["-vn"]),
+      "-map_metadata", "-1", "-map_metadata:s:a", "-1",
+      "-map_chapters", "-1", ...metadataArgs, "-f", "mp4",
+      NicoDownloader.FSOutputFileNameGet(),
     ];
-    console.log(`FFmpegコマンド: ffmpeg ${ffmpegArgs.join(" ")}`);
-    console.log("=== 変換処理開始 ===");
-  } catch (err) {
-    //エラーが出たら
-    DebugPrint("runFFmpeg:" + err);
+    ffmpeg(Core, ffmpegArgs);
+    // The existing print callback creates the Blob and removes the FS output.
+    resolve();
+    await waitEnd;
+    return;
   }
 
-  //終了を待つ
-  await waitEnd;
-
-  //終了後
-  DebugPrint("waitEnd");
 };
 
 /**
@@ -157,20 +100,7 @@ const runFFmpeg_m3u8 = async (
  * @see https://developer.mozilla.org/ja/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Complete_list_of_MIME_types
  */
 function FiletypeToMimetype(filetype) {
-  switch (filetype) {
-    case "mp4":
-      return "video/mp4";
-    case "wav":
-      return "audio/wav";
-    case "mp3":
-      return "audio/mpeg";
-    case "webm":
-      return "video/webm";
-    case "aac":
-      return "audio/aac";
-    default:
-      return "video/mp4";
-  }
+  return filetype === 'm4a' ? 'audio/mp4' : false;
 }
 
 //ここから追記
@@ -182,7 +112,11 @@ function FiletypeToMimetype(filetype) {
  * @returns
  */
 async function DownEncoder(NicoDownloader, m3u8s, Nicovideo) {
-  NicoDownloader.SetVideoFormat(Nicovideo.video_name); //フォーマットをセット
+  const outputJob = NicoDownloader._nicoPocketJob;
+  if (outputJob?.outputOwner !== 'nicopocket' || !globalThis.NicoPocketAAC?.owns(outputJob)) return false;
+  if (outputJob.encoderStarted) return false;
+  outputJob.encoderStarted = true;
+  NicoDownloader.SetVideFormatByExtension('m4a');
   if (NicoDownloader.CheckVideoFormat() == false) return false; //フォーマットをチェック
 
   //ダウンロード前のチェック処理
@@ -200,8 +134,6 @@ async function DownEncoder(NicoDownloader, m3u8s, Nicovideo) {
   //https://github.com/naari3/nico-downloader-ffmpeg/blob/main/src/background.ts  //偉大なる@_naari_氏による協力に感謝いたします
   let file = null;
   
-  console.log("=== FFmpeg初期化開始 ===");
-  
   const core = await createFFmpegCore({
     printErr: (e) => {
       DebugPrint(`FFMPEG:${e}`);
@@ -213,54 +145,23 @@ async function DownEncoder(NicoDownloader, m3u8s, Nicovideo) {
       // FFmpegの進捗情報を解析
       parseFFmpegProgress(e, NicoDownloader);
       if (e.startsWith("FFMPEG_END")) {
-        // FFMPEG_ENDで終了
-        //終了時の処理
-        NicoDownloader.ButtonTextWrite("変換終了");
-        DebugPrint("FFMPEG_END 変換終了");
-        if (last_save_sm !== Nicovideo.video_sm) {
-          try {
-            last_save_sm = Nicovideo.video_sm;
-            //NicoDownloader.FSOutputFileNameSet(Nicovideo);
-
-            file = core.FS.readFile(NicoDownloader.FSOutputFileNameGet());
-            console.log({ file });
-
-            //ファイルの保存処理
-            DebugPrint("ファイルの保存処理");
-            //blob
-            const blob = new Blob([file.buffer], {
-              //MIMEタイプを設定
-              type: FiletypeToMimetype(NicoDownloader.CheckVideoFormat()),
-            });
-            DebugPrint("Blob作成完了");
-
-            //ディスクへの保存処理
-            const a = document.createElement("a");
-            const fileName = Nicovideo.video_name;
-
-            a.id = VideoData.Video_DLlink.a2;
-            document.body.appendChild(a);
-
-            const link = document.getElementById(VideoData.Video_DLlink.a2);
-            link.href = URL.createObjectURL(blob);
-            link.download = fileName;
-
-            link.style.display = "none";
-
-            document.body.click();
-
-            core.FS.unlink(NicoDownloader.FSOutputFileNameGet());
-            NicoDownloader.ButtonTextWrite("まもなく保存完了");
-          } catch (e) {
-            console.error("Error:FaildedToBlob\n", e);
-          }
-        } else {
-          DebugPrint("Error:既に保存済み");
+        // Output ownership survives async completion; no browser-facing legacy output exists here.
+        if (!globalThis.NicoPocketAAC?.owns(outputJob) || outputJob.outputProduced) return;
+        outputJob.outputProduced = true;
+        const path = NicoDownloader.FSOutputFileNameGet();
+        try {
+          if (path !== outputJob.videoId + '.m4a') throw new Error('M4A出力名を確認できませんでした。');
+          file = core.FS.readFile(path);
+          const blob = new Blob([file], { type: 'audio/mp4' });
+          outputJob.onOutput(blob, outputJob.title + '.m4a');
+        } catch (error) {
+          outputJob.onError(error);
+        } finally {
+          try { core.FS.unlink(path); } catch { /* No output on failure. */ }
         }
       }
     },
   });
-  console.debug({ core });
 
   //URLsを片っ端から処理
   //落としてファイルシステムにいれていく
@@ -308,7 +209,7 @@ async function DownEncoder(NicoDownloader, m3u8s, Nicovideo) {
           resolve(filename);
         }
       ).catch(error => {
-        console.error(`ダウンロードエラー: ${NicoDownloader.TSURLs[i]}`, error);
+        console.error("音声セグメント取得エラー");
         reject(error);
       });
     });
@@ -329,7 +230,7 @@ async function DownEncoder(NicoDownloader, m3u8s, Nicovideo) {
         // 少し待機してメモリを安定させる
         await new Promise(resolve => setTimeout(resolve, 100));
       } catch (error) {
-        console.error("バッチダウンロードエラー:", error);
+        console.error("バッチダウンロードエラー");
         throw error;
       }
     }
@@ -386,7 +287,7 @@ async function Downloadblob(url, NicoDownloader) {
     
     return blob;
   } catch (error) {
-    console.error(`Blob取得エラー: ${url}`, error);
+    console.error("Blob取得エラー");
     throw error;
   }
 }
@@ -411,7 +312,7 @@ async function DownloadUint8Array(url, NicoDownloader) {
     
     return byte;
   } catch (error) {
-    console.error(`Uint8Array取得エラー: ${url}`, error);
+    console.error("音声データ取得エラー");
     throw error;
   }
 }
@@ -428,10 +329,7 @@ async function DownloadUint8Array(url, NicoDownloader) {
 ////////////////////////////////////////////////////////////////////////
 async function Transcode(Core, m3u8name, NicoDownloader, Nicovideo) {
   NicoDownloader.ButtonTextWrite("変換中");
-  let mode = await Option_setLoading("downFile_setting") || "mp4"; // モードを取得
-  if (mode == 0) mode = "mp4"; // モードが取得できなかった場合はデフォルトのmp4にする
-
-  console.log(`Current mode: ${mode}`); // モードを確認するログ
+  const mode = "m4a"; // Owned output cannot inherit a legacy AAC preference.
   const file = await runFFmpeg_m3u8(
     Core,
     m3u8name,
@@ -451,6 +349,7 @@ async function Transcode(Core, m3u8name, NicoDownloader, Nicovideo) {
  */
 ////////////////////////////////////////////////////////////////////////
 function Option_setLoading(name) {
+  if (name === "downFile_setting") return "m4a";
 
   try {
     chrome.storage.local.get(name, function (value) {
@@ -522,7 +421,7 @@ function parseFFmpegProgress(output, NicoDownloader) {
   if (output.includes("Array buffer allocation failed") || 
       output.includes("RangeError") || 
       output.includes("out of memory")) {
-    console.error("メモリ不足エラーが検出されました:", output);
+    console.error("メモリ不足エラーが検出されました");
     NicoDownloader.ButtonTextWrite("メモリ不足エラー");
     return;
   }
@@ -533,7 +432,6 @@ function parseFFmpegProgress(output, NicoDownloader) {
     const currentFrame = parseInt(frameMatch[1]);
     // 進捗ログの頻度を制限（100フレームごと）
     if (currentFrame % 100 === 0) {
-      console.log(`変換進捗: フレーム ${currentFrame} 処理中`);
     }
   }
 
@@ -541,28 +439,24 @@ function parseFFmpegProgress(output, NicoDownloader) {
   const timeMatch = output.match(/time=(\d{2}:\d{2}:\d{2}\.\d{2})/);
   if (timeMatch) {
     const currentTime = timeMatch[1];
-    console.log(`変換進捗: 時刻 ${currentTime} まで処理完了`);
   }
 
   // 速度情報を検出
   const speedMatch = output.match(/speed=\s*([\d.]+)x/);
   if (speedMatch) {
     const speed = parseFloat(speedMatch[1]);
-    console.log(`変換速度: ${speed}x (リアルタイムの${speed}倍速)`);
   }
 
   // ビットレート情報を検出
   const bitrateMatch = output.match(/bitrate=\s*([\d.]+)kbits\/s/);
   if (bitrateMatch) {
     const bitrate = parseFloat(bitrateMatch[1]);
-    console.log(`現在のビットレート: ${bitrate} kbits/s`);
   }
 
   // ファイルサイズ情報を検出
   const sizeMatch = output.match(/size=\s*(\d+)kB/);
   if (sizeMatch) {
     const size = parseInt(sizeMatch[1]);
-    console.log(`出力ファイルサイズ: ${size} kB`);
   }
 
   // 進捗パーセンテージを推定してボタンに表示

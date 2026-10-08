@@ -1,54 +1,82 @@
 {
-    "manifest_version": 3,
-    "name": "nico downloader",
-    "description": "ニコニコからの動画保存をサポートする他、ニコニコを便利に使うための非公式の拡張機能です。",
-    "version": "5.0.0.21",
-    "icons": {
-        "16": "icon_16.png",
-        "48": "icon_48.png",
-        "128": "icon_128.png"
+  "manifest_version": 3,
+  "name": "NicoPocket",
+  "description": "nico_downloaderを基礎に、AAC音源のM4A化・メタデータ・アートワーク設定を行う個人用途のChrome拡張機能",
+  "version": "5.0.0.23",
+  "icons": {
+    "16": "pocket/icons/icon-16.png",
+    "32": "pocket/icons/icon-32.png",
+    "48": "pocket/icons/icon-48.png",
+    "128": "pocket/icons/icon-128.png"
+  },
+  "permissions": [
+    "storage",
+    "downloads"
+  ],
+  "host_permissions": [
+    "https://nicovideo.cdn.nimg.jp/*",
+    "https://tn.smilevideo.jp/*"
+  ],
+  "web_accessible_resources": [
+    {
+      "matches": [
+        "https://www.nicovideo.jp/*"
+      ],
+      "resources": [
+        "dist/ffmpeg-core2.js",
+        "dist/ffmpeg-core.wasm",
+        "dist/utils.js",
+        "func/nicojson.js",
+        "func/ndl.js"
+      ]
+    }
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.nicovideo.jp/*"
+      ],
+      "js": [
+        "pocket/title.js",
+        "pocket/content.js"
+      ],
+      "css": [
+        "pocket/content.css"
+      ],
+      "run_at": "document_start"
     },
-    "permissions": [
-        "storage"
-    ],
-    "web_accessible_resources": [
-        {
-            "matches": [
-                "https://www.nicovideo.jp/*"
-            ],
-            "resources": [
-                "options.html",
-                "dist/ffmpeg-core2.js",
-                "dist/ffmpeg-core.wasm",
-                "dist/utils.js",
-                "func/nicojson.js",
-                "func/ndl.js"
-            ]
-        }
-    ],
-    "content_scripts": [
-        {
-            "matches": [
-                "https://www.nicovideo.jp/*"
-            ],
-            "js": [
-                "nicovideodownloader_scripts.js",
-                "options.js",
-                "dist/ffmpeg-core2.js",
-                "dist/utils.js",
-                "func/nicojson.js",
-                "func/ndl.js"
-            ]
-        },
-        {
-            "matches": [
-                "https://dic.nicovideo.jp/*"
-            ],
-            "js": [
-                "dic_scripts.js",
-                "options.js"
-            ]
-        }
-    ],
-    "options_page": "options.html"
+    {
+      "matches": [
+        "https://www.nicovideo.jp/*"
+      ],
+      "js": [
+        "nicovideodownloader_scripts.js",
+        "options.js",
+        "dist/ffmpeg-core2.js",
+        "dist/utils.js",
+        "func/nicojson.js",
+        "func/ndl.js",
+        "pocket/metadata.js",
+        "pocket/audio-quality.js",
+        "pocket/video-info.js",
+        "pocket/aac-bridge.js"
+      ]
+    }
+  ],
+  "background": {
+    "service_worker": "pocket/background.js"
+  },
+  "options_page": "options.html",
+  "short_name": "NicoPocket",
+  "version_name": "1.0.0（個人利用版）",
+  "action": {
+    "default_title": "NicoPocket — 使い方",
+    "default_popup": "options.html",
+    "default_icon": {
+      "16": "pocket/icons/icon-16.png",
+      "32": "pocket/icons/icon-32.png",
+      "48": "pocket/icons/icon-48.png",
+      "128": "pocket/icons/icon-128.png"
+    }
+  }
 }

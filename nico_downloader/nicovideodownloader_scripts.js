@@ -1,9 +1,19 @@
 //ダウンロード関数
 
-async function VideoDown() {
+async function VideoDown(request) {
+    // In the NicoPocket product, acquisition starts only through an owned request.
+    if (request?.outputOwner !== 'nicopocket' || !request.job
+        || globalThis.NicoPocketAAC?.owns(request.job) !== true) return false;
+    if (request.job.acquisitionStarted) return false;
+    request.job.acquisitionStarted = true;
     // 必要なクラスの初期化
     const NicoDownloader = new NicoDownloaderClass(); //NicoDownloaderクラスの初期化
     const Nicovideo = new NicovideoClass(); //NicovideoClassクラスの初期化
+    // Bind ownership before any legacy UI or save method can run.
+    if (request?.outputOwner === 'nicopocket') {
+        NicoDownloader._nicoPocketJob = request.job;
+        NicoDownloader._nicoPocketMetadata = { ...request.job.metadata, title: request.job.title, videoId: request.job.videoId };
+    }
 
     //そもそもマッチするか確認
     if (Nicovideo.CheckNicovideoWatchURL() == false) return false;
@@ -11,28 +21,22 @@ async function VideoDown() {
     // Downloadingがtrueの場合は終了
     if (NicoDownloader.VideoDownloadingCheck()) return false;
 
-    // ダウンロードリンクをクリック
-    NicoDownloader.DownloadLinkClick();
+    // Acquisition only: final output is saved by the background-owned M4A job.
 
     // 現在のページのsm番号の取得しセット
     Nicovideo.video_sm = Nicovideo.VideoSmGet(NicoDownloader.MatchingSMIDArray);
 
     await Nicovideo.SetAllFromVideoSm(Nicovideo.video_sm);
+    if (request && !request.isCurrent()) return false;
 
     await new Promise(async (resolve, reject) => {
         // sm番号かタイトルが取得できなかったら終了
         if (Nicovideo.video_sm == "" || Nicovideo.video_title == "")
             reject("video_sm or video_title is null");
 
-        // デフォルト動画ファイル名の定義
-        let downFile_setting = await downFile_get();
-        DebugPrint("downFile_setting:" + downFile_setting); // 取得した値を表示
-
-        let video_name = NicoDownloader.VideoDownloadNameMake(
-            Nicovideo.video_sm,
-            Nicovideo.video_title,
-            downFile_setting
-        );
+        // Output names come only from the owned editor job, never legacy format preferences.
+        if (!request.isCurrent()) { reject(new Error('取得元動画が切り替わりました。')); return; }
+        const video_name = NicoDownloader.VideoDownloadNameMake(Nicovideo.video_sm, Nicovideo.video_title);
         Nicovideo.video_name = video_name;
         //DebugPrint("video_name:" + Nicovideo.video_name);
 
@@ -44,32 +48,19 @@ async function VideoDown() {
     });
     DebugPrint("video_name:" + Nicovideo.video_name);
 
-    // 非同期でdownFile_settingを取得する関数
-    function downFile_get() {
-        return new Promise((resolve, reject) => {
-            chrome.storage.local.get("downFile_setting", function (value) {
-                if (chrome.runtime.lastError) {
-                    reject(chrome.runtime.lastError);
-                } else {
-                    resolve(value.downFile_setting);
-                }
-            });
-        });
-    }
-
     //ダウンロードリンクの表示
     if (!NicoDownloader.VideoLoadedCheck(Nicovideo.video_sm)) {
         //ここがtrueになるとすでに読み込み済み
 
         new Promise((resolve, reject) => {
             //ボタンをとりあえず作成
-            NicoDownloader.ButtonFirstMake();
+            // No legacy button or save link is created for an owned request.
 
             NicoDownloader.ButtonTextWrite("処理開始"); //ボタンの文字を変更
 
             // 保存ボタンを作成
             DebugPrint("video_name_savebutton:" + Nicovideo.video_name);
-            NicoDownloader.SaveButtonMake(Nicovideo.video_name);
+
 
             //ダウンロード前のチェック処理
             if (NicoDownloader.CheckBeforeDownload() == false)
@@ -81,6 +72,7 @@ async function VideoDown() {
             resolve();
         })
             .then(() => {
+                if (request && !request.isCurrent()) return false;
                 ////////////////////////////////////////////////////////////////
                 // ここから実行部分
                 ////////////////////////////////////////////////////////////////
@@ -116,14 +108,14 @@ let intervalId;
 try {
     clearInterval(intervalId);
 
-    // 2秒ごとにVideoDownを実行
+    // Phase 1: 2秒ごとにNicoPocketの編集ボタンを配置
     intervalId = setInterval(() => {
         if (interval1st) {
             // 2回目以降は実行
             try {
-                VideoDown();
+                NicoPocketUI.placeButton();
             } catch (e) {
-                console.log(e);
+                console.error('NicoPocket: 起動ボタンの配置に失敗しました。');
             }
         } else {
             // 1回目は実行しない
@@ -131,7 +123,7 @@ try {
         }
     }, 2000);
 } catch (error) {
-    console.log(e);
+    console.error('NicoPocket: 起動ボタンの配置に失敗しました。');
 }
 
 //ページ表示時発火処理

@@ -9,11 +9,12 @@ LocalStorageで保存される値について
 "video_hlssave"         0                   0だと初期設定、1だと低速、2だと高速モード
 "debug"                 0                   1だとデバッグ出力あり
 "language_setting"      ja                  言語設定
-"downFile_setting"      mp4                 保存ファイル形式(採用)
+"downFile_setting"      m4a                 互換キー・M4A固定
  */
 
 
 function Option_setWriting(name, value) {
+    if (name === "downFile_setting") value = "m4a";
     //ローカルストレージに書き込みを行います
     localStorage.setItem(name, value);
     chrome.storage.local.set({
@@ -25,6 +26,7 @@ function Option_setWriting(name, value) {
 }
 
 function Option_setLoading(name) {
+    if (name === "downFile_setting") return "m4a";
     //ローカルストレージより読み込みを行います
     //return localStorage.getItem(name);//これだとだめ
 
@@ -81,7 +83,7 @@ function defalt_dataWrite() {
     Option_setWriting("debug", "0");
     Option_setWriting("video_hlssave", "0");
     Option_setWriting("language_setting", "ja");
-    Option_setWriting("downFile_setting", "mp4"); //mp4として
+    Option_setWriting("downFile_setting", "m4a"); // M4A only
     Options_Save();
 }
 
@@ -96,7 +98,7 @@ function Options_onload() {
         LoadOption("video_hlssave");
         LoadOption("debug");
         LoadOption("language_setting");
-        LoadOption("downFile_setting") || "mp4";
+        LoadOption("downFile_setting") || "m4a";
     } catch (error) {
         Default_click();
         Options_Save();
@@ -105,7 +107,6 @@ function Options_onload() {
 }
 
 function LoadOption(name) {
-    console.log(setOption(name))
     if (typeof setOption(name) === "undefined") {
 
     } else {
@@ -118,13 +119,5 @@ function isNullOrUndefined(o) {
 }
 
 
-function DebugPrint(text) {
-    if (setOption("debug") === "1") {
-        if (typeof text === "object") {
-            console.log(JSON.stringify(text));
-        } else {
-            console.log("debug:" + text);
-        }
-        
-    }
-}
+// Keep upstream calls compatible without exposing watch data or media URLs.
+function DebugPrint() {}

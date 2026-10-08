@@ -10,12 +10,37 @@
     let modalContext, priorFocus, priorOverflow, priorAria;
     let presetSequence = 0;
     const presetStatus = document.getElementById('metadata-preset-status');
-    const presetFields = { artists: fields.artist, albumArtists: fields.album_artist, genres: fields.genre, albums: fields.album };
+    const presetFields = { artists: fields.artist, albumArtists: fields.album_artist, albums: fields.album };
+    const genreSelect = document.getElementById('metadata-genre-select');
+    let genrePresets;
+    function renderGenre() {
+        genreSelect.replaceChildren();
+        for (const [label, items] of [
+            ['標準ジャンル', NicoPocketPresets.builtins.filter(item => genrePresets?.enabledBuiltins.includes(item.id)).map(item => ({ value: 'builtin:' + item.id, label: item.label }))],
+            ['追加ジャンル', (genrePresets?.custom || []).map((label, index) => ({ value: 'custom-preset:' + index, label }))]
+        ]) {
+            if (!items.length) continue;
+            const group = document.createElement('optgroup'); group.label = label;
+            for (const item of items) { const option = document.createElement('option'); option.value = item.value; option.textContent = item.label; group.append(option); }
+            genreSelect.append(group);
+        }
+        const custom = document.createElement('option'); custom.value = 'custom'; custom.textContent = 'カスタム入力'; genreSelect.append(custom);
+        const selected = [...genreSelect.options].find(option => option.value !== 'custom' && option.textContent === fields.genre.value);
+        genreSelect.value = selected?.value || 'custom';
+        fields.genre.hidden = genreSelect.value !== 'custom';
+    }
+    genreSelect.addEventListener('change', () => {
+        if (!dialog.open || !sourceMatches()) return;
+        const custom = genreSelect.value === 'custom';
+        fields.genre.hidden = !custom;
+        if (custom) fields.genre.focus(); else fields.genre.value = genreSelect.selectedOptions[0].textContent;
+    });
     async function refreshPresets() {
         const version = ++presetSequence;
         try {
             const presets = await NicoPocketPresets.load();
             if (version !== presetSequence) return;
+            genrePresets = presets.genres; renderGenre();
             for (const [key, input] of Object.entries(presetFields)) {
                 const list = document.getElementById('metadata-presets-' + key); list.replaceChildren();
                 for (const value of presets[key]) {
@@ -53,6 +78,7 @@
             input.value = !automatic && Object.hasOwn(NicoPocketEditor.metadataEdits, key)
                 ? NicoPocketEditor.metadataEdits[key] : initial[key] || '';
         }
+        renderGenre();
     }
     function open() {
         if (edit.disabled || document.querySelector('dialog[open]') || !NicoPocketEditor.context) return;
@@ -103,7 +129,7 @@
     dialog.addEventListener('keydown', event => {
         if (event.key === 'Escape') { event.preventDefault(); dialog.close(); return; }
         if (event.key !== 'Tab') return;
-        const controls = [...dialog.querySelectorAll('button:not(:disabled), input:not(:disabled), textarea:not(:disabled)')];
+        const controls = [...dialog.querySelectorAll('button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled)')].filter(control => !control.hidden);
         const first = controls[0], last = controls.at(-1);
         if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
         else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }

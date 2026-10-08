@@ -8,7 +8,7 @@
 <p>Artist・Album Artist・Genre・Series / Albumのよく使う値を登録できます。登録順に表示します。</p>
 <div id="preset-groups"></div>
 <div class="preset-backup"><button id="preset-export" type="button">プリセットを書き出す</button><button id="preset-import" type="button">プリセットを読み込む</button><input id="preset-import-file" type="file" accept=".json,application/json" hidden /></div>
-<p class="note">JSONはversion 1形式です。読み込みは確認後に全置換します。1項目は4000文字以内の1行、各種類1000件まで、ファイルは1 MB以内です。</p>
+<p class="note">JSONはversion 2形式です。旧version 1も移行して読み込めます。読み込みは確認後に全置換します。1項目は4000文字以内の1行、各種類1000件まで、ファイルは1 MB以内です。</p>
 <p id="preset-status" role="status"></p>
 </section>
 <h2>保存と音質</h2><p>保存形式はM4Aです。標準音質は192 kbps以下の最高品質、高音質は取得可能な最高品質を使います。192 kbps以下がない場合も元音源のまま保存し、音声は再エンコードしません。</p>

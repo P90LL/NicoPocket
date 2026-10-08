@@ -136,3 +136,7 @@ main { width: min(1120px, 100%); padding: 40px clamp(22px, 5vw, 64px) 70px; marg
 .preset-chips button { min-width: 0; max-width: 100%; border: 1px solid var(--line); border-radius: 999px; padding: 5px 10px; background: var(--surface-soft); color: var(--text); overflow-wrap: anywhere; text-align: left; font-size: .85rem; }
 .preset-chips button:hover { border-color: var(--blue); }
 .preset-chips .preset-empty { color: var(--muted); font-size: .8rem; }
+
+#metadata-genre-select { width: 100%; min-width: 0; }
+#metadata-genre { margin-top: 8px; width: 100%; min-width: 0; }
+#metadata-genre[hidden] { display: none; }

@@ -27,13 +27,35 @@
         if (!value) throw new Error('empty');
         return value;
     }
+    const values = (presets, key) => key === 'genres' ? presets.genres.custom : presets[key];
     function render(presets) {
         host.replaceChildren();
         for (const [key, label] of Object.entries(NicoPocketPresets.groups)) {
             const section = document.createElement('section'); section.className = 'preset-group'; section.dataset.group = key;
             const heading = document.createElement('h3'); heading.textContent = label;
+            section.append(heading);
+            if (key === 'genres') {
+                const title = document.createElement('h4'); title.textContent = '標準ジャンル';
+                const builtinList = document.createElement('div'); builtinList.className = 'genre-builtins';
+                for (const builtin of NicoPocketPresets.builtins) {
+                    const label = document.createElement('label'), checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox'; checkbox.dataset.builtin = builtin.id;
+                    checkbox.checked = presets.genres.enabledBuiltins.includes(builtin.id);
+                    checkbox.addEventListener('change', () => {
+                        const enabled = checkbox.checked;
+                        void update(current => {
+                            const ids = new Set(current.genres.enabledBuiltins);
+                            if (enabled) ids.add(builtin.id); else ids.delete(builtin.id);
+                            current.genres.enabledBuiltins = NicoPocketPresets.builtins.filter(item => ids.has(item.id)).map(item => item.id);
+                        });
+                    });
+                    label.append(checkbox, document.createTextNode(builtin.label)); builtinList.append(label);
+                }
+                const customTitle = document.createElement('h4'); customTitle.textContent = '追加ジャンル';
+                section.append(title, builtinList, customTitle);
+            }
             const list = document.createElement('ul'); list.className = 'preset-list';
-            for (const value of presets[key]) {
+            for (const value of values(presets, key)) {
                 const row = document.createElement('li'), text = document.createElement('span'); text.textContent = value;
                 const edit = document.createElement('button'); edit.type = 'button'; edit.textContent = '編集'; edit.setAttribute('aria-label', label + '「' + value + '」を編集');
                 const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = '削除'; remove.className = 'preset-delete'; remove.setAttribute('aria-label', label + '「' + value + '」を削除');
@@ -47,27 +69,27 @@
                     form.addEventListener('submit', event => {
                         event.preventDefault();
                         void update(current => {
-                            const next = valueFrom(input), index = current[key].indexOf(value);
-                            if (index < 0 || (next !== value && current[key].includes(next))) throw new Error('duplicate or changed');
-                            current[key][index] = next;
+                            const next = valueFrom(input), index = values(current, key).indexOf(value);
+                            if (index < 0 || (next !== value && values(current, key).includes(next))) throw new Error('duplicate or changed');
+                            values(current, key)[index] = next;
                         });
                     });
                 });
                 remove.addEventListener('click', () => {
                     if (!confirm(label + 'のこのプリセットを削除しますか？')) return;
-                    void update(current => { current[key] = current[key].filter(item => item !== value); });
+                    void update(current => { const list = values(current, key), index = list.indexOf(value); if (index >= 0) list.splice(index, 1); });
                 });
                 row.append(text, edit, remove); list.append(row);
             }
-            if (!presets[key].length) { const empty = document.createElement('li'); empty.textContent = '未登録'; empty.className = 'note'; list.append(empty); }
+            if (!values(presets, key).length) { const empty = document.createElement('li'); empty.textContent = '未登録'; empty.className = 'note'; list.append(empty); }
             const form = document.createElement('form'); form.className = 'preset-add';
             const input = document.createElement('input'); input.type = 'text'; input.maxLength = 4000; input.required = true; input.placeholder = '新しいプリセット'; input.setAttribute('aria-label', label + 'プリセットを追加');
             const add = document.createElement('button'); add.type = 'submit'; add.textContent = '＋ 追加';
             form.addEventListener('submit', event => {
                 event.preventDefault();
-                void update(current => { const value = valueFrom(input); if (current[key].includes(value)) throw new Error('duplicate'); current[key].push(value); });
+                void update(current => { const value = valueFrom(input); if (values(current, key).includes(value)) throw new Error('duplicate'); values(current, key).push(value); });
             });
-            form.append(input, add); section.append(heading, list, form); host.append(section);
+            form.append(input, add); section.append(list, form); host.append(section);
         }
         setBusy(busy);
     }

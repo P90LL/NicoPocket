@@ -147,3 +147,9 @@ main { width: min(1120px, 100%); padding: 40px clamp(22px, 5vw, 64px) 70px; marg
 #metadata-genre-select { width: 100%; min-width: 0; }
 #metadata-genre { margin-top: 8px; width: 100%; min-width: 0; }
 #metadata-genre[hidden] { display: none; }
+
+/* Align Album and Genre controls and their helper text. */
+#metadata-album { min-height: 40px; height: 40px; }
+#metadata-genre { margin-top: 4px; }
+
+.titlebar-actions { display: flex; justify-content: flex-end; gap: 8px; }

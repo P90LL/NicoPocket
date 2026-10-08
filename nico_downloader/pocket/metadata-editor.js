@@ -26,11 +26,10 @@
         for (const value of values) {
             if (!value.toLocaleLowerCase().includes(query)) continue;
             const row = document.createElement('label'), input = document.createElement('input'), text = document.createElement('span');
-            input.type = selection.key === 'albums' ? 'radio' : 'checkbox';
+            input.type = 'checkbox';
             input.name = 'preset-choice'; input.checked = selection.checked.has(value);
             text.textContent = value;
             input.addEventListener('change', () => {
-                if (input.type === 'radio') selection.checked.clear();
                 if (input.checked) selection.checked.add(value); else selection.checked.delete(value);
                 updatePickerCount();
             });
@@ -51,12 +50,9 @@
     function openPicker(key, button) {
         if (!dialog.open || picker.open || !sourceMatches()) return;
         const input = presetFields[key];
-        selection = { key, original: input.value, checked: new Set(key === 'albums'
-            ? [input.value.trim()] : input.value.split(/\r\n|\r|\n/).map(line => line.trim()).filter(Boolean)) };
+        selection = { key, original: input.value, checked: new Set(input.value.split(/\r\n|\r|\n/).map(line => line.trim()).filter(Boolean)) };
         document.getElementById('metadata-preset-title').textContent = NicoPocketPresets.groups[key] + 'のプリセットを選択';
-        document.getElementById('metadata-preset-help').textContent = key === 'albums'
-            ? '1件選択すると入力を置き換えます。未選択の場合は現在の入力を維持します。'
-            : 'チェックで追加・除外します。手入力した値は維持します。';
+        document.getElementById('metadata-preset-help').textContent = 'チェックで追加・除外します。手入力した値は維持します。';
         pickerFocus = button; pickerSearch.value = ''; renderPicker();
         picker.showModal(); dialog.inert = true; dialog.setAttribute('aria-hidden', 'true');
         pickerSearch.focus({ preventScroll: true });
@@ -71,18 +67,12 @@
         event.preventDefault(); event.stopPropagation();
         if (!selection || !sourceMatches() || NicoPocketEditor.downloading) { picker.close(); return; }
         const input = presetFields[selection.key], values = availablePresets[selection.key] || [];
-        let next = selection.original;
-        if (selection.key === 'albums') {
-            const value = values.find(value => selection.checked.has(value));
-            if (value !== undefined) next = value;
-        } else {
-            const lines = selection.original.split(/\r\n|\r|\n/);
-            // Only registered preset lines may be removed; retain free input verbatim.
-            const kept = selection.original.trim() ? lines.filter(line => !values.includes(line.trim()) || selection.checked.has(line.trim())) : [];
-            const present = new Set(kept.map(line => line.trim()));
-            const added = values.filter(value => selection.checked.has(value) && !present.has(value));
-            next = [...kept, ...added].join('\n');
-        }
+        const lines = selection.original.split(/\r\n|\r|\n/);
+        // Only registered preset lines may be removed; retain free input verbatim.
+        const kept = selection.original.trim() ? lines.filter(line => !values.includes(line.trim()) || selection.checked.has(line.trim())) : [];
+        const present = new Set(kept.map(line => line.trim()));
+        const added = values.filter(value => selection.checked.has(value) && !present.has(value));
+        const next = [...kept, ...added].join('\n');
         if (next.length > input.maxLength) { pickerStatus.textContent = '入力は4000文字以内にしてください。選択数を減らしてください。'; return; }
         input.value = next;
         presetStatus.textContent = NicoPocketPresets.groups[selection.key] + 'の下書きへ反映しました。「適用」で確定します。';

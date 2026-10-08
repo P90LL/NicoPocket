@@ -45,6 +45,11 @@ function render(context) {
 }
 titleInput.addEventListener('input', () => { NicoPocketEditor.title = titleInput.value; renderMetadata(); });
 qualityInput.addEventListener('change', () => { NicoPocketEditor.quality = qualityInput.value; });
+document.getElementById('open-settings').addEventListener('click', () => {
+    void chrome.runtime.openOptionsPage().catch(() => {
+        document.getElementById('save-status').textContent = '拡張機能のオプションから設定画面を開いてください。';
+    });
+});
 document.getElementById('close-editor').addEventListener('click', () => window.close());
 async function refresh() {
     const sequence = ++refreshSequence;

@@ -18,7 +18,7 @@
   <header class="titlebar">
     <div class="brand"><img src="./logo.svg" alt="" width="36" height="36" /><span><strong>NicoPocket</strong><small>にこぽけ</small></span></div>
     <div class="titlebar-center"><span class="development-badge">NicoPocket · 個人利用版</span></div>
-    <button id="close-editor" class="secondary" type="button">閉じる</button>
+    <div class="titlebar-actions"><button id="open-settings" class="secondary" type="button">設定</button><button id="close-editor" class="secondary" type="button">閉じる</button></div>
   </header>
   <main>
     <div class="review-layout">
@@ -79,19 +79,19 @@
 </dialog>
 <dialog id="metadata-dialog" aria-labelledby="metadata-dialog-title">
   <h2 id="metadata-dialog-title">メタデータを編集</h2>
-  <p class="subtle">Artist・Album Artistは1行につき1項目。名前内のスペースはそのまま保存します。空欄の項目は保存しません。</p>
   <dl id="metadata-reference" class="metadata-reference"></dl>
   <form id="metadata-form">
     <div class="metadata-fields">
       <div class="metadata-field"><label for="metadata-artist">Artist<textarea id="metadata-artist" maxlength="4000" rows="3"></textarea></label><p class="preset-hint">プリセット（追加・除外）</p><button id="metadata-presets-artists" class="secondary preset-picker-button" type="button" aria-haspopup="dialog" aria-label="Artistプリセットを選択">プリセットを選択</button></div>
       <div class="metadata-field"><label for="metadata-album-artist">Album Artist<textarea id="metadata-album-artist" maxlength="4000" rows="3"></textarea></label><p class="preset-hint">プリセット（追加・除外）</p><button id="metadata-presets-albumArtists" class="secondary preset-picker-button" type="button" aria-haspopup="dialog" aria-label="Album Artistプリセットを選択">プリセットを選択</button></div>
-      <div class="metadata-field"><label for="metadata-genre-select">Genre<select id="metadata-genre-select"><option value="custom">カスタム入力</option></select></label><input id="metadata-genre" type="text" maxlength="4000" aria-label="カスタムGenre" placeholder="自由に入力してください" /><p class="preset-hint">標準・追加ジャンルから選択、またはカスタム入力。</p></div>
-      <div class="metadata-field"><label for="metadata-album">Series / Album<input id="metadata-album" type="text" maxlength="4000" /></label><p class="preset-hint">プリセット（置き換え）</p><button id="metadata-presets-albums" class="secondary preset-picker-button" type="button" aria-haspopup="dialog" aria-label="Series / Albumプリセットを選択">プリセットを選択</button></div>
+      <div class="metadata-field"><label for="metadata-album">Series / Album<textarea id="metadata-album" maxlength="4000" rows="1"></textarea></label><p class="preset-hint">プリセット（追加・除外）</p><button id="metadata-presets-albums" class="secondary preset-picker-button" type="button" aria-haspopup="dialog" aria-label="Series / Albumプリセットを選択">プリセットを選択</button></div>
+      <div class="metadata-field"><label for="metadata-genre-select">Genre<select id="metadata-genre-select"><option value="custom">カスタム入力</option></select></label><p class="preset-hint">標準・追加ジャンルから選択、またはカスタム入力。</p><input id="metadata-genre" type="text" maxlength="4000" aria-label="カスタムGenre" placeholder="自由に入力してください" /></div>
     </div>
     <p id="metadata-preset-status" class="subtle" role="status"></p>
     <button id="metadata-presets-settings" class="secondary" type="button">プリセットを管理</button>
-    <p class="subtle">Titleは保存タイトルと共通です。Video ID・Video URL・Date・Creation Timeは変更できません。</p>
     <button id="metadata-reset" class="secondary" type="button">自動取得値に戻す</button>
+    <p class="preset-hint">Titleは保存タイトルと共通です。Video ID・Video URL・Date・Creation Timeは変更できません。</p>
+    <p class="preset-hint">Artist・Album Artist・Series / Albumは1行につき1項目。名前内のスペースはそのまま保存します。空欄の項目は保存しません。</p>
     <div class="action-row">
       <button id="metadata-cancel" class="secondary" type="button">キャンセル</button>
       <button id="metadata-apply" class="primary" type="submit">適用</button>

@@ -11,7 +11,7 @@ const NicoPocketMetadata = {
         for (const key of ['artist', 'genre', 'album', 'album_artist']) {
             if (!Object.hasOwn(edits || {}, key) || typeof edits[key] !== 'string') continue;
             const text = edits[key].slice(0, 4000);
-            result[key] = key === 'artist' || key === 'album_artist'
+            result[key] = key === 'artist' || key === 'album_artist' || key === 'album'
                 ? this.normalizeMultiValue(text).slice(0, 4000).trim() : text.replace(/[\u0000-\u001f\u007f]/g, ' ').trim();
         }
         return result;

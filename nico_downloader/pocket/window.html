@@ -10,6 +10,7 @@
   <script src="./save.js" defer></script>
   <script src="./artwork.js" defer></script>
   <script src="./window.js" defer></script>
+  <script src="./metadata-editor.js" defer></script>
 </head>
 <body>
 <div class="app-shell">
@@ -42,7 +43,7 @@
         <p id="artwork-note">元のサムネイルです。1:1の正方形に編集できます。</p>
         <button id="artwork-edit" class="secondary full" type="button" disabled>Artworkを編集</button>
       </aside>
-      <div class="action-row download-actions"><button id="download" class="primary full" type="button" aria-describedby="save-status" disabled>Download</button><button id="cancel-download" class="secondary full" type="button" hidden>キャンセル</button></div>
+      <div class="action-row download-actions"><button id="download" class="primary full" type="button" aria-describedby="save-status" disabled>Download</button><button id="metadata-edit" class="secondary full" type="button" disabled>メタデータを編集</button><button id="cancel-download" class="secondary full" type="button" hidden>キャンセル</button></div>
       <progress id="download-progress" max="100" hidden aria-label="ダウンロード進捗"></progress>
       <p id="save-status" class="subtle" role="status">M4Aとして保存します。</p>
       </div>
@@ -74,6 +75,25 @@
     <button id="artwork-cancel" class="secondary" type="button">キャンセル</button>
     <button id="artwork-apply" class="primary" type="button">適用</button>
   </div>
+</dialog>
+<dialog id="metadata-dialog" aria-labelledby="metadata-dialog-title">
+  <h2 id="metadata-dialog-title">メタデータを編集</h2>
+  <p class="subtle">Artist・Album Artistは1行につき1項目。名前内のスペースはそのまま保存します。空欄の項目は保存しません。</p>
+  <dl id="metadata-reference" class="metadata-reference"></dl>
+  <form id="metadata-form">
+    <div class="metadata-fields">
+      <label for="metadata-artist">Artist<textarea id="metadata-artist" maxlength="4000" rows="3"></textarea></label>
+      <label for="metadata-album-artist">Album Artist<textarea id="metadata-album-artist" maxlength="4000" rows="3"></textarea></label>
+      <label for="metadata-genre">Genre<input id="metadata-genre" type="text" maxlength="4000" /></label>
+      <label for="metadata-album">Series / Album<input id="metadata-album" type="text" maxlength="4000" /></label>
+    </div>
+    <p class="subtle">Titleは保存タイトルと共通です。Video ID・Video URL・Date・Creation Timeは変更できません。</p>
+    <button id="metadata-reset" class="secondary" type="button">自動取得値に戻す</button>
+    <div class="action-row">
+      <button id="metadata-cancel" class="secondary" type="button">キャンセル</button>
+      <button id="metadata-apply" class="primary" type="submit">適用</button>
+    </div>
+  </form>
 </dialog>
 </body>
 </html>

@@ -53,6 +53,7 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
         videoId: data.videoId, sourceUrl, title: data.title.slice(0, 500),
         originalTitle: data.originalTitle.slice(0, 1000), uploader: data.uploader.slice(0, 500),
         genre: typeof data.genre === 'string' ? data.genre.trim().slice(0, 500) : '',
+        videoTags: NicoPocketMetadata.normalizeTags(data.videoTags),
         series: typeof data.series === 'string' ? data.series.trim().slice(0, 500) : '',
         registeredAt: typeof data.registeredAt === 'string' ? data.registeredAt.trim().slice(0, 100) : '',
         thumbnailUrl: /^https:\/\//.test(data.thumbnailUrl) ? data.thumbnailUrl : '',
@@ -150,7 +151,7 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
                 requestedQuality: message.quality === 'high' ? 'high' : 'standard',
                 sourceTabId: context.sourceTabId, title: NicoPocketTitle.normalize(message.title, context.videoId), startedAt: Date.now(),
                 metadata: { uploader: context.uploader, sourceUrl: context.sourceUrl,
-                    genre: context.genre, series: context.series, registeredAt: context.registeredAt,
+                    genre: context.genre, videoTags: context.videoTags, series: context.series, registeredAt: context.registeredAt,
                     metadataEdits: NicoPocketMetadata.normalizeEdits(message.metadataEdits) } };
             await chrome.storage.session.set({ 'np:aacJob': state });
             try {

@@ -16,9 +16,13 @@ const NicoPocketMetadata = {
         }
         return result;
     },
+    normalizeTags(values) {
+        return Array.isArray(values) ? values.slice(0, 50).filter(value => typeof value === 'string')
+            .map(value => value.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, 500)).filter(Boolean) : [];
+    },
     build(info) {
         const tags = { title: info.title, artist: info.uploader, episode_id: info.videoId,
-            comment: info.sourceUrl, genre: info.genre, album: info.series,
+            comment: info.sourceUrl, keywords: this.normalizeTags(info.videoTags).join(', '), genre: info.genre, album: info.series,
             album_artist: info.series ? info.uploader : undefined };
         if (typeof info.registeredAt === 'string' && info.registeredAt.trim()
             && Number.isFinite(Date.parse(info.registeredAt))) {

@@ -33,10 +33,12 @@ const NicoPocketVideo = (() => {
             available: audio.isAvailable === true,
             bitrate: Number.isFinite(audio.bitrate) && audio.bitrate > 0 ? audio.bitrate : null
         })).filter(audio => audio.id) : [];
+        let videoTags = [];
+        try { videoTags = NicoPocketMetadata.normalizeTags(video.JsonToTags()); } catch { /* Missing/malformed tags must not prevent saving. */ }
         return {
             videoId, sourceUrl, originalTitle,
             title: NicoPocketTitle.normalize(originalTitle, videoId),
-            uploader, thumbnailUrl, audioQualities,
+            uploader, thumbnailUrl, audioQualities, videoTags,
             genre: video.JsonToGenre(), series: video.JsonToSeries(), registeredAt: video.JsonToRegisteredAt(),
             informationSource: failed || !returnedId ? 'page-fallback' : 'upstream-json',
             incomplete: !originalTitle || !uploader || !thumbnailUrl

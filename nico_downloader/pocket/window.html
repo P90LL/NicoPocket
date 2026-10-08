@@ -10,6 +10,7 @@
   <script src="./save.js" defer></script>
   <script src="./artwork.js" defer></script>
   <script src="./window.js" defer></script>
+  <script src="./metadata-presets.js" defer></script>
   <script src="./metadata-editor.js" defer></script>
 </head>
 <body>
@@ -82,11 +83,13 @@
   <dl id="metadata-reference" class="metadata-reference"></dl>
   <form id="metadata-form">
     <div class="metadata-fields">
-      <label for="metadata-artist">Artist<textarea id="metadata-artist" maxlength="4000" rows="3"></textarea></label>
-      <label for="metadata-album-artist">Album Artist<textarea id="metadata-album-artist" maxlength="4000" rows="3"></textarea></label>
-      <label for="metadata-genre">Genre<input id="metadata-genre" type="text" maxlength="4000" /></label>
-      <label for="metadata-album">Series / Album<input id="metadata-album" type="text" maxlength="4000" /></label>
+      <div class="metadata-field"><label for="metadata-artist">Artist<textarea id="metadata-artist" maxlength="4000" rows="3"></textarea></label><p class="preset-hint">プリセット（追加）</p><div id="metadata-presets-artists" class="preset-chips" aria-label="Artistプリセット"></div></div>
+      <div class="metadata-field"><label for="metadata-album-artist">Album Artist<textarea id="metadata-album-artist" maxlength="4000" rows="3"></textarea></label><p class="preset-hint">プリセット（追加）</p><div id="metadata-presets-albumArtists" class="preset-chips" aria-label="Album Artistプリセット"></div></div>
+      <div class="metadata-field"><label for="metadata-genre">Genre<input id="metadata-genre" type="text" maxlength="4000" /></label><p class="preset-hint">プリセット（置き換え）</p><div id="metadata-presets-genres" class="preset-chips" aria-label="Genreプリセット"></div></div>
+      <div class="metadata-field"><label for="metadata-album">Series / Album<input id="metadata-album" type="text" maxlength="4000" /></label><p class="preset-hint">プリセット（置き換え）</p><div id="metadata-presets-albums" class="preset-chips" aria-label="Series / Albumプリセット"></div></div>
     </div>
+    <p id="metadata-preset-status" class="subtle" role="status"></p>
+    <button id="metadata-presets-settings" class="secondary" type="button">プリセットを管理</button>
     <p class="subtle">Titleは保存タイトルと共通です。Video ID・Video URL・Date・Creation Timeは変更できません。</p>
     <button id="metadata-reset" class="secondary" type="button">自動取得値に戻す</button>
     <div class="action-row">

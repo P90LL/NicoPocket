@@ -8,6 +8,41 @@
         genre: document.getElementById('metadata-genre'), album: document.getElementById('metadata-album'),
         album_artist: document.getElementById('metadata-album-artist') };
     let modalContext, priorFocus, priorOverflow, priorAria;
+    let presetSequence = 0;
+    const presetStatus = document.getElementById('metadata-preset-status');
+    const presetFields = { artists: fields.artist, albumArtists: fields.album_artist, genres: fields.genre, albums: fields.album };
+    async function refreshPresets() {
+        const version = ++presetSequence;
+        try {
+            const presets = await NicoPocketPresets.load();
+            if (version !== presetSequence) return;
+            for (const [key, input] of Object.entries(presetFields)) {
+                const list = document.getElementById('metadata-presets-' + key); list.replaceChildren();
+                for (const value of presets[key]) {
+                    const button = document.createElement('button'); button.type = 'button'; button.textContent = value;
+                    button.addEventListener('click', () => {
+                        if (!dialog.open || !sourceMatches()) return;
+                        if (key === 'artists' || key === 'albumArtists') {
+                            const lines = input.value.split(/\r\n|\r|\n/).map(line => line.trim()).filter(Boolean);
+                            if (lines.includes(value)) { presetStatus.textContent = 'この値は入力済みです。'; return; }
+                            const next = [...lines, value].join('\n');
+                            if (next.length > input.maxLength) { presetStatus.textContent = '入力は4000文字以内にしてください。'; return; }
+                            input.value = next;
+                        } else input.value = value;
+                        presetStatus.textContent = NicoPocketPresets.groups[key] + 'の下書きへ反映しました。「適用」で確定します。';
+                    });
+                    list.append(button);
+                }
+                if (!presets[key].length) { const empty = document.createElement('span'); empty.className = 'preset-empty'; empty.textContent = '未登録'; list.append(empty); }
+            }
+        } catch { if (version === presetSequence) presetStatus.textContent = 'プリセットを読み込めませんでした。手入力は利用できます。'; }
+    }
+    document.getElementById('metadata-presets-settings').addEventListener('click', () => {
+        void chrome.runtime.openOptionsPage().catch(() => { presetStatus.textContent = '拡張機能のオプションからプリセットを管理してください。'; });
+    });
+    chrome.storage.onChanged.addListener((changes, area) => {
+        if (area === 'local' && changes[NicoPocketPresets.key] && dialog.open) void refreshPresets();
+    });
     const sourceMatches = () => modalContext && NicoPocketEditor.context
         && ['sourceTabId', 'videoId', 'sourceUrl'].every(key => modalContext[key] === NicoPocketEditor.context[key]);
     function availability() { edit.disabled = !NicoPocketEditor.context || Boolean(NicoPocketEditor.downloading); }
@@ -22,6 +57,8 @@
     function open() {
         if (edit.disabled || document.querySelector('dialog[open]') || !NicoPocketEditor.context) return;
         fill();
+        presetStatus.textContent = '';
+        void refreshPresets();
         const context = NicoPocketEditor.context;
         modalContext = { sourceTabId: context.sourceTabId, videoId: context.videoId, sourceUrl: context.sourceUrl };
         reference.replaceChildren();

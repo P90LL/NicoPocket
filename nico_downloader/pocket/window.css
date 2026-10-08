@@ -129,3 +129,10 @@ main { width: min(1120px, 100%); padding: 40px clamp(22px, 5vw, 64px) 70px; marg
 .metadata-reference dt { color: var(--muted); }
 .metadata-reference dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
 @media (max-width: 640px) { #metadata-dialog { width: calc(100vw - 20px); padding: 16px; } .metadata-fields { grid-template-columns: 1fr; } }
+
+.metadata-field { min-width: 0; }
+.preset-hint { color: var(--muted); font-size: .8rem; margin: 8px 0 5px; }
+.preset-chips { display: flex; flex-wrap: wrap; gap: 6px; max-height: 180px; overflow: auto; overscroll-behavior: contain; }
+.preset-chips button { min-width: 0; max-width: 100%; border: 1px solid var(--line); border-radius: 999px; padding: 5px 10px; background: var(--surface-soft); color: var(--text); overflow-wrap: anywhere; text-align: left; font-size: .85rem; }
+.preset-chips button:hover { border-color: var(--blue); }
+.preset-chips .preset-empty { color: var(--muted); font-size: .8rem; }

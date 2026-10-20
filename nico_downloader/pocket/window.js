@@ -40,7 +40,8 @@ function render(context) {
     document.getElementById('video-status').textContent = context.incomplete
         ? '一部の動画情報を取得できませんでした。動画ページから再度開いてください。'
         : '現在の動画情報を読み込みました。';
-    document.getElementById('audio-info').textContent = '標準音質は192 kbps以下を優先し、取得音源が192 kbpsを超える場合は192 kbpsへ再エンコードします。高音質は元音源をそのまま保存します。';
+    const standardBitrate = NicoPocketPolicy.standardBitrateKbps;
+    document.getElementById('audio-info').textContent = `標準音質は${standardBitrate} kbps以下を優先し、取得音源が${standardBitrate} kbpsを超える場合は${standardBitrate} kbpsへ再エンコードします。高音質は元音源をそのまま保存します。`;
     NicoPocketArtwork.setContext(context, NicoPocketEditor);
 }
 titleInput.addEventListener('input', () => { NicoPocketEditor.title = titleInput.value; renderMetadata(); });
@@ -94,7 +95,7 @@ async function artworkForDownload(context) {
     await NicoPocketArtwork.ready(context);
     const artwork = NicoPocketEditor.artwork;
     const blob = artwork?.blob;
-    if (!blob || blob.type !== 'image/jpeg' || blob.size > 2 * 1024 * 1024
+    if (!blob || blob.type !== 'image/jpeg' || blob.size > NicoPocketPolicy.artworkMaxBytes
         || artwork.videoId !== context.videoId || artwork.sourceTabId !== context.sourceTabId
         || artwork.sourceUrl !== context.sourceUrl || artwork.thumbnailUrl !== context.thumbnailUrl) return null;
     try {
@@ -136,7 +137,8 @@ function renderMetadata() {
     if (!context) return;
     const tags = NicoPocketMetadata.build({ ...context, metadataEdits: NicoPocketEditor.metadataEdits, title: NicoPocketTitle.normalize(NicoPocketEditor.title, context.videoId) });
     const labels = { title: 'Title', artist: 'Artist', episode_id: 'Video ID', comment: 'Video URL', keywords: 'Tags', genre: 'Genre', album: 'Series / Album', album_artist: 'Album Artist', date: 'Date', creation_time: 'Creation Time' };
-    const values = { ...tags, artwork: NicoPocketEditor.artwork?.blob ? '768 × 768 JPEG' : 'なし（画像の取得・生成失敗時）' };
+    const values = { ...tags, artwork: NicoPocketEditor.artwork?.blob
+        ? `${NicoPocketPolicy.artworkSize} × ${NicoPocketPolicy.artworkSize} JPEG` : 'なし（画像の取得・生成失敗時）' };
     for (const [key, value] of Object.entries(values)) {
         const row = document.createElement('div'), term = document.createElement('dt'), description = document.createElement('dd');
         term.textContent = labels[key] || 'Artwork'; description.textContent = value;

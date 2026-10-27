@@ -26,7 +26,16 @@ async function VideoDown(request) {
     // 現在のページのsm番号の取得しセット
     Nicovideo.video_sm = Nicovideo.VideoSmGet(NicoDownloader.MatchingSMIDArray);
 
-    await Nicovideo.SetAllFromVideoSm(Nicovideo.video_sm);
+    if (request.job.videoId !== Nicovideo.video_sm) return false;
+    try {
+        await Nicovideo.SetAllFromVideoSm(Nicovideo.video_sm);
+    } catch (error) {
+        // The editor already carries the confirmed video ID and title. Optional page
+        // metadata must not block an owned M4A acquisition when watch JSON is absent.
+        if (!request.job.title) throw error;
+        console.warn('NicoPocket: 動画ページの追加情報を取得できないため、編集画面の情報で続行します。');
+    }
+    if (!Nicovideo.video_title) Nicovideo.video_title = request.job.title || Nicovideo.GetPageTitle() || Nicovideo.video_sm;
     if (request && !request.isCurrent()) return false;
 
     await new Promise(async (resolve, reject) => {

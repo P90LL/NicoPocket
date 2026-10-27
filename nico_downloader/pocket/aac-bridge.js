@@ -16,6 +16,14 @@
         }
         job.artworkFile = '';
     }
+    function cleanupArtworkInput(job) {
+        if (!job.core || job.executing || !job.artworkFile) return;
+        try { job.core.FS.unlink(job.artworkFile); } catch { /* Already removed or never created. */ }
+        job.artworkFile = '';
+        if (job.controller.signal.aborted) {
+            try { job.core.FS.unlink(job.videoId + '.m4a'); } catch { /* No partial output. */ }
+        }
+    }
     function stop(job, phase, error, report = true) {
         if (active !== job) return;
         active = null;
@@ -226,8 +234,15 @@
         const job = active;
         if (!job) return coreFactory(options);
         guard(job);
+        // The upstream single-threaded core resolves its WASM relative to the page
+        // unless mainScriptUrlOrBlob carries an explicit asset URL.
+        const assetURLs = {
+            wasmURL: chrome.runtime.getURL('dist/ffmpeg-core.wasm'),
+            workerURL: chrome.runtime.getURL('dist/ffmpeg-core2.js')
+        };
         const core = await coreFactory({
             ...options,
+            mainScriptUrlOrBlob: '#' + btoa(JSON.stringify(assetURLs)),
             printErr: message => {
                 options.printErr?.(message);
                 if (/out of memory|Array buffer allocation failed|Conversion failed|Error opening output|Invalid data found/i.test(message)) {
@@ -255,6 +270,29 @@
             } finally { job.artwork = null; }
         }
         guard(job);
+        const execute = core.exec;
+        core.exec = function (...args) {
+            guard(job);
+            job.executing = true;
+            void notify(job, 'processing');
+            try {
+                const result = execute.apply(this, args);
+                if (result !== 0) {
+                    failed(job, 'FFmpeg処理がエラーで終了しました。');
+                    throw new Error(`FFmpeg exited with status ${result}`);
+                }
+                return result;
+            } catch (error) {
+                if (!job.controller.signal.aborted) {
+                    console.error('NicoPocket: FFmpeg処理に失敗しました。');
+                    failed(job, 'FFmpeg処理に失敗しました。動画ページのログを確認してください。');
+                }
+                throw error;
+            } finally {
+                job.executing = false;
+                cleanupArtworkInput(job);
+            }
+        };
         const call = core.ccall;
         core.ccall = function (...args) {
             guard(job);

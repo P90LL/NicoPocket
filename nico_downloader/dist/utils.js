@@ -15,7 +15,9 @@ const ffmpeg = (Core, args) => {
   try {
     Core.setTimeout(-1);
     Core.exec("-nostdin", ...args);
-    if (Core.ret !== 0) throw new Error(`FFmpeg exited with status ${Core.ret}`);
+    const status = Core.ret;
+    if (status !== 0) throw new Error(`FFmpeg exited with status ${status}`);
+    return status;
   } finally {
     Core.reset();
   }
@@ -38,13 +40,6 @@ const runFFmpeg_m3u8 = async (
   Nicovideo,
   mode = "m4a" // Output ownership determines the format.
 ) => {
-  let resolve = null;
-
-  //終了を待つためのPromise
-  const waitEnd = new Promise((r) => {
-    resolve = r;
-  });
-
   const job = NicoDownloader._nicoPocketJob;
   if (mode !== 'm4a') return false;
   if (job?.outputOwner !== 'nicopocket' || !globalThis.NicoPocketAAC?.owns(job)) return false;
@@ -74,10 +69,22 @@ const runFFmpeg_m3u8 = async (
       "-map_chapters", "-1", ...metadataArgs, "-f", "mp4",
       NicoDownloader.FSOutputFileNameGet(),
     ];
-    ffmpeg(Core, ffmpegArgs);
-    // The existing print callback creates the Blob and removes the FS output.
-    resolve();
-    await waitEnd;
+    const status = ffmpeg(Core, ffmpegArgs);
+    if (status !== 0) throw new Error(`FFmpeg exited with status ${status}`);
+    if (!job.outputProduced && globalThis.NicoPocketAAC?.owns(job)) {
+      const outputPath = NicoDownloader.FSOutputFileNameGet();
+      try {
+        const output = Core.FS.readFile(outputPath);
+        const blob = new Blob([output], { type: 'audio/mp4' });
+        job.outputProduced = true;
+        job.onOutput(blob, job.title + '.m4a');
+      } catch (error) {
+        job.onError(error);
+        throw error;
+      } finally {
+        try { Core.FS.unlink(outputPath); } catch { /* Output may not have been created. */ }
+      }
+    }
     return;
   }
 

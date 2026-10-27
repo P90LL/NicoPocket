@@ -244,7 +244,7 @@
             try {
                 const bytes = Uint8Array.from(job.artwork);
                 const picture = await createImageBitmap(new Blob([bytes], { type: 'image/jpeg' }));
-                const valid = picture.width === 768 && picture.height === 768;
+                const valid = picture.width === NicoPocketPolicy.artworkSize && picture.height === NicoPocketPolicy.artworkSize;
                 picture.close(); guard(job);
                 if (!valid) throw new Error('Artworkのサイズが一致しません。');
                 job.artworkFile = 'np-artwork.jpg';

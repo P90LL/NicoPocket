@@ -45,7 +45,20 @@ const NicoPocketArtwork = (() => {
     });
     let editor, state, bitmap, controller, draft, dragging, generation = 0, pendingLoad;
     let sourcePreview = '', editedPreview = '', loading = false, exporting = false;
-    const SIZE = 768;
+    const SIZE = NicoPocketPolicy.artworkSize;
+    const JPEG_QUALITY = NicoPocketPolicy.artworkJpegQuality;
+    canvas.width = canvas.height = SIZE;
+    document.getElementById('artwork-output-size').textContent = `${SIZE} × ${SIZE} · JPEG`;
+    function paintCrop(targetCanvas, source, crop) {
+        const side = Math.min(source.width, source.height) / crop.zoom;
+        const context = targetCanvas.getContext('2d');
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = 'high';
+        context.fillStyle = '#fff';
+        context.fillRect(0, 0, SIZE, SIZE);
+        context.drawImage(source, source.width / 2 + crop.x - side / 2,
+            source.height / 2 + crop.y - side / 2, side, side, 0, 0, SIZE, SIZE);
+    }
     function release() {
         controller?.abort(); bitmap?.close(); bitmap = null;
         URL.revokeObjectURL(sourcePreview); URL.revokeObjectURL(editedPreview);
@@ -81,12 +94,8 @@ const NicoPocketArtwork = (() => {
             bitmap = next; sourcePreview = URL.createObjectURL(blob);
             // Produce the same final JPEG for untouched thumbnails, without opening the editor.
             const output = document.createElement('canvas'); output.width = output.height = SIZE;
-            const side = Math.min(next.width, next.height);
-            const outputContext = output.getContext('2d');
-            outputContext.imageSmoothingEnabled = true; outputContext.imageSmoothingQuality = 'high';
-            outputContext.fillStyle = '#fff'; outputContext.fillRect(0, 0, SIZE, SIZE);
-            outputContext.drawImage(next, (next.width - side) / 2, (next.height - side) / 2, side, side, 0, 0, SIZE, SIZE);
-            const initial = await new Promise(resolve => output.toBlob(resolve, 'image/jpeg', 0.9));
+            paintCrop(output, next, { zoom: 1, x: 0, y: 0 });
+            const initial = await new Promise(resolve => output.toBlob(resolve, 'image/jpeg', JPEG_QUALITY));
             if (version !== generation || state !== target) return;
             if (!initial) throw new Error('中央クロップを生成できませんでした。');
             target.blob = initial; editedPreview = URL.createObjectURL(initial);
@@ -120,11 +129,7 @@ const NicoPocketArtwork = (() => {
     function draw() {
         if (!bitmap || !draft) return;
         const side = clamp();
-        const ctx = canvas.getContext('2d');
-        ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
-        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, SIZE, SIZE);
-        ctx.drawImage(bitmap, bitmap.width / 2 + draft.x - side / 2,
-            bitmap.height / 2 + draft.y - side / 2, side, side, 0, 0, SIZE, SIZE);
+        paintCrop(canvas, bitmap, draft);
         const width = background.clientWidth || 900, height = background.clientHeight || 520;
         background.width = Math.round(width); background.height = Math.round(height);
         const bounds = canvas.getBoundingClientRect();
@@ -216,7 +221,7 @@ const NicoPocketArtwork = (() => {
         document.getElementById('artwork-reset').disabled = true;
         status.textContent = 'Artworkを生成しています…';
         try {
-            const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+            const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', JPEG_QUALITY));
             if (!blob) throw new Error('画像を生成できませんでした。');
             if (state !== target || version !== generation || !dialog.open) return;
             URL.revokeObjectURL(editedPreview); editedPreview = URL.createObjectURL(blob);

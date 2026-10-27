@@ -2,8 +2,8 @@
 // Never infer audio bitrate from variant BANDWIDTH.
 globalThis.NicoPocketAudioQuality = {
     outputArgs(requested, bitrate) {
-        return requested === 'standard' && Number.isFinite(bitrate) && bitrate > 192
-            ? ['-c:a', 'aac', '-b:a', '192k', '-profile:a', 'aac_low'] : ['-c:a', 'copy'];
+        return requested === 'standard' && Number.isFinite(bitrate) && bitrate > NicoPocketPolicy.standardBitrateKbps
+            ? ['-c:a', 'aac', '-b:a', `${NicoPocketPolicy.standardBitrateKbps}k`, '-profile:a', 'aac_low'] : ['-c:a', 'copy'];
     },
     select(renditions, qualities, requested) {
         const candidates = renditions.filter(item => item.TYPE === 'AUDIO' && typeof item.URI === 'string');
@@ -24,7 +24,7 @@ globalThis.NicoPocketAudioQuality = {
         if (!ranked.length) return null;
         // An unrankable candidate could be best: retain the upstream default safely.
         if (ranked.some(item => !item)) return null;
-        const below = ranked.filter(item => item.bitrate <= 192);
+        const below = ranked.filter(item => item.bitrate <= NicoPocketPolicy.standardBitrateKbps);
         const pool = requested === 'high' || !below.length ? ranked : below;
         return pool.reduce((best, item) => item.bitrate > best.bitrate ? item : best);
     }

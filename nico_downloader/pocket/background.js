@@ -1,5 +1,5 @@
 // Carries lightweight video information and explicit download requests.
-importScripts('title.js', 'metadata.js');
+importScripts('policy.js', 'title.js', 'metadata.js');
 // Compatibility preference is migrated, but acquisition never reads it for output selection.
 async function enforceM4AFormat() {
     const values = await chrome.storage.local.get('downFile_setting');
@@ -108,7 +108,7 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
             else {
                 const bytes = Number.isFinite(item.bytesReceived) ? item.bytesReceived : 0;
                 const activity = bytes !== state.saveBytes ? Date.now() : state.saveActivityAt || state.saveReadyAt;
-                if (Date.now() - activity > 10 * 60 * 1000) {
+                if (Date.now() - activity > NicoPocketPolicy.saveIdleTimeoutMs) {
                     await updateAAC(state.id, { phase: 'error', error: '保存待ちがタイムアウトしました。Chromeの許可・保存先を確認して再試行してください。' });
                 } else await updateAAC(state.id, { saveBytes: bytes, saveActivityAt: activity,
                     paused: item.paused === true, saveStatus: item.paused || !item.filename || bytes === 0 ? 'waiting' : 'writing' });
@@ -143,7 +143,7 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
             const artwork = candidate && candidate.videoId === context.videoId
                 && candidate.sourceTabId === context.sourceTabId && candidate.sourceUrl === context.sourceUrl
                 && candidate.thumbnailUrl === context.thumbnailUrl && Array.isArray(bytes)
-                && bytes.length >= 4 && bytes.length <= 2 * 1024 * 1024
+                && bytes.length >= 4 && bytes.length <= NicoPocketPolicy.artworkMaxBytes
                 && bytes.every(value => Number.isInteger(value) && value >= 0 && value <= 255)
                 && bytes[0] === 255 && bytes[1] === 216 && bytes.at(-2) === 255 && bytes.at(-1) === 217
                 ? bytes : null;

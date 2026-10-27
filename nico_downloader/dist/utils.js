@@ -2,16 +2,6 @@
 //をもとに改造したもの
 //LGPL
 
-const parseArgs = (Core, args) => {
-  const argsPtr = Core._malloc(args.length * Uint32Array.BYTES_PER_ELEMENT);
-  args.forEach((s, idx) => {
-    const buf = Core._malloc(s.length + 1);
-    Core.writeAsciiToMemory(s, buf);
-    Core.setValue(argsPtr + Uint32Array.BYTES_PER_ELEMENT * idx, buf, "i32");
-  });
-  return [args.length, argsPtr];
-};
-
 // ffmpegの実行
 const ffmpeg = (Core, args) => {
   if (!/^[a-zA-Z0-9]+\.m4a$/.test(args.at(-1))
@@ -22,12 +12,13 @@ const ffmpeg = (Core, args) => {
               && args[args.lastIndexOf('-profile:a') + 1] === 'aac_low'))) {
     throw new Error('M4A / AAC 192 kbps\u4ee5\u5916\u306e\u51fa\u529b\u306f\u8a31\u53ef\u3055\u308c\u3066\u3044\u307e\u305b\u3093\u3002');
   }
-  Core.ccall(
-    "main",
-    "number",
-    ["number", "number"],
-    parseArgs(Core, ["ffmpeg", "-nostdin", ...args])
-  ); //https://github.com/naari3/nico-downloader-ffmpeg/blob/main/src/background.ts
+  try {
+    Core.setTimeout(-1);
+    Core.exec("-nostdin", ...args);
+    if (Core.ret !== 0) throw new Error(`FFmpeg exited with status ${Core.ret}`);
+  } finally {
+    Core.reset();
+  }
 };
 
 ////////////////////////////////////////////////////////////////
@@ -71,9 +62,7 @@ const runFFmpeg_m3u8 = async (
       if (typeof value !== "string") return [];
       const text = value.replace(/[\u0000-\u001f\u007f]/g, " ").trim();
       if (!text) return [];
-      // parseArgs uses writeAsciiToMemory: pass UTF-8 bytes, as upstream does.
-      const utf8 = Array.from(new TextEncoder().encode(text), byte => String.fromCharCode(byte)).join("");
-      return ["-metadata", `${key}=${utf8}`];
+      return ["-metadata", `${key}=${text}`];
     });
     const artworkFile = NicoDownloader._nicoPocketJob?.artworkFile;
     const ffmpegArgs = [

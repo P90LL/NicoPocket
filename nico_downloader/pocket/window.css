@@ -50,6 +50,7 @@ input, select { min-height: 40px; padding: 7px 10px; border: 1px solid var(--lin
 .download-actions { display: grid; grid-template-columns: minmax(0, 1fr); margin-top: 16px; }
 .download-actions button.primary:hover:not(:disabled) { background: #1059c4; border-color: #1059c4; }
 .cover-summary { align-self: start; display: grid; gap: 14px; }
+.artwork-source-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .status-pill { border-radius: 999px; padding: 4px 9px; background: var(--blue-soft); color: var(--blue); font-size: 11px; font-weight: 800; white-space: nowrap; }
 .cover-preview { width: 100%; aspect-ratio: 1; display: grid; place-items: center; border-radius: 12px; overflow: hidden; background: var(--surface-soft); border: 1px dashed var(--line); color: var(--muted); text-align: center; }
 .cover-preview span { padding: 20px; }
@@ -73,6 +74,7 @@ main { width: min(1120px, 100%); padding: 40px clamp(22px, 5vw, 64px) 70px; marg
 .action-row button { min-height: 40px; border: 1px solid var(--line); border-radius: 9px; padding: 0 15px; background: var(--surface); color: var(--text); font-weight: 700; }
 .action-row button.primary { background: #1769e0; border-color: #1769e0; color: #fff; }
 @media (max-width: 700px) { .review-layout { grid-template-columns: 1fr; } main { padding: 24px 18px 40px; } }
+@media (max-width: 420px) { .artwork-source-actions { grid-template-columns: 1fr; } }
 
 .video-details { display: grid; gap: 6px; }
 .video-details div { display: flex; gap: 12px; }

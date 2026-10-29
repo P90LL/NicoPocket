@@ -8,6 +8,9 @@ const NicoPocketArtwork = (() => {
     const status = document.getElementById('artwork-edit-status');
     const apply = document.getElementById('artwork-apply');
     const edit = document.getElementById('artwork-edit');
+    const autoSource = document.getElementById('artwork-auto-source');
+    const localSource = document.getElementById('artwork-local-source');
+    const localFile = document.getElementById('artwork-local-file');
     const image = document.getElementById('artwork-image');
     const empty = document.getElementById('artwork-empty');
     const pill = document.getElementById('artwork-state');
@@ -47,6 +50,7 @@ const NicoPocketArtwork = (() => {
     let sourcePreview = '', editedPreview = '', loading = false, exporting = false;
     const SIZE = NicoPocketPolicy.artworkSize;
     const JPEG_QUALITY = NicoPocketPolicy.artworkJpegQuality;
+    const INPUT_LIMIT_MIB = NicoPocketPolicy.artworkInputMaxBytes / (1024 * 1024);
     canvas.width = canvas.height = SIZE;
     document.getElementById('artwork-output-size').textContent = `${SIZE} × ${SIZE} · JPEG`;
     function paintCrop(targetCanvas, source, crop) {
@@ -71,9 +75,35 @@ const NicoPocketArtwork = (() => {
         image.alt = state?.blob ? '正方形Artwork' : '現在の動画のサムネイル';
         pill.textContent = error ? '読み込み失敗' : loading ? '読み込み中' : state?.edited ? '編集済み' : state?.blob ? '中央クロップ' : '未設定';
         empty.textContent = error || (loading ? 'サムネイルを読み込んでいます…' : 'サムネイル未取得');
-        note.textContent = state?.edited ? '正方形Artworkの編集結果です。保存時にM4Aへ埋め込みます。' : '1:1の正方形に編集できます。未編集時は中央クロップを使用します。';
-        edit.disabled = !state?.thumbnailUrl || loading || exporting || Boolean(editor?.downloading);
+        note.textContent = error || (state?.sourceMode === 'local'
+            ? `ローカル画像「${state.sourceName}」を使用中です。${state.edited ? '切り抜いた結果を保存します。' : '1:1の正方形に編集できます。'}`
+            : state?.edited ? '動画サムネイルの切り抜き結果を保存します。' : '動画サムネイルを使用中です。1:1の正方形に編集できます。');
+        autoSource.textContent = state?.sourceMode === 'local' ? '動画サムネイルに戻す' : '動画サムネイルを再取得';
+        localSource.textContent = state?.sourceMode === 'local' ? '別のローカル画像を選択' : 'ローカル画像を選択';
+        autoSource.disabled = !state?.thumbnailUrl || loading || exporting || Boolean(editor?.downloading);
+        localSource.disabled = !state || exporting || Boolean(editor?.downloading);
+        edit.disabled = !bitmap || loading || exporting || Boolean(editor?.downloading);
         window.dispatchEvent(new Event('np:artwork-change'));
+    }
+    async function installBlob(target, blob, sourceMode, sourceName, version) {
+        let next;
+        try {
+            next = await createImageBitmap(blob);
+            if (version !== generation || state !== target) return;
+            if (!next.width || !next.height || next.width * next.height > 40000000) throw new Error('画像の大きさを確認できませんでした。');
+            const output = document.createElement('canvas'); output.width = output.height = SIZE;
+            paintCrop(output, next, { zoom: 1, x: 0, y: 0 });
+            const initial = await new Promise(resolve => output.toBlob(resolve, 'image/jpeg', JPEG_QUALITY));
+            if (version !== generation || state !== target) return;
+            if (!initial) throw new Error('中央クロップを生成できませんでした。');
+            bitmap?.close();
+            URL.revokeObjectURL(sourcePreview); URL.revokeObjectURL(editedPreview);
+            bitmap = next; next = null;
+            sourcePreview = URL.createObjectURL(blob);
+            editedPreview = URL.createObjectURL(initial);
+            Object.assign(target, { blob: initial, sourceMode, sourceName, zoom: 1, x: 0, y: 0, edited: false });
+            loading = false; summary();
+        } finally { next?.close(); }
     }
     async function load(target) {
         const version = ++generation;
@@ -87,24 +117,30 @@ const NicoPocketArtwork = (() => {
             const response = await fetch(url.href, { credentials: 'omit', referrerPolicy: 'no-referrer', signal: request.signal });
             if (!response.ok) throw new Error('画像を取得できませんでした。');
             const blob = await response.blob();
-            if (blob.size > 10 * 1024 * 1024) throw new Error('画像サイズが大きすぎます。');
-            const next = await createImageBitmap(blob);
-            if (version !== generation || state !== target) { next.close(); return; }
-            if (!next.width || !next.height || next.width * next.height > 40000000) { next.close(); throw new Error('画像の大きさを確認できませんでした。'); }
-            bitmap = next; sourcePreview = URL.createObjectURL(blob);
-            // Produce the same final JPEG for untouched thumbnails, without opening the editor.
-            const output = document.createElement('canvas'); output.width = output.height = SIZE;
-            paintCrop(output, next, { zoom: 1, x: 0, y: 0 });
-            const initial = await new Promise(resolve => output.toBlob(resolve, 'image/jpeg', JPEG_QUALITY));
-            if (version !== generation || state !== target) return;
-            if (!initial) throw new Error('中央クロップを生成できませんでした。');
-            target.blob = initial; editedPreview = URL.createObjectURL(initial);
-            loading = false; summary();
+            if (blob.size > NicoPocketPolicy.artworkInputMaxBytes) throw new Error('画像サイズが大きすぎます。');
+            await installBlob(target, blob, 'auto', '', version);
         } catch (error) {
             if (version === generation && state === target) {
                 loading = false; summary('画像を読み込めませんでした。Artworkを編集から再試行できます。');
             }
         } finally { clearTimeout(deadline); }
+    }
+    async function loadLocalFile(file) {
+        const target = state;
+        if (!target || !file) return;
+        const version = ++generation;
+        controller?.abort(); controller = null;
+        loading = true; summary();
+        try {
+            if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) throw new Error('JPEG、PNG、WebP画像を選択してください。');
+            if (file.size > NicoPocketPolicy.artworkInputMaxBytes) throw new Error(`画像サイズは${INPUT_LIMIT_MIB} MiB以下にしてください。`);
+            await installBlob(target, file, 'local', file.name, version);
+        } catch (error) {
+            if (version === generation && state === target) {
+                loading = false;
+                summary(error.message || 'ローカル画像を読み込めませんでした。');
+            }
+        }
     }
     function setContext(context, nextEditor) {
         editor = nextEditor;
@@ -115,7 +151,7 @@ const NicoPocketArtwork = (() => {
         draft = dragging = null; exporting = loading = false;
         state = context ? { key, videoId: context.videoId, sourceTabId: context.sourceTabId,
             sourceUrl: context.sourceUrl, thumbnailUrl: context.thumbnailUrl || '',
-            zoom: 1, x: 0, y: 0, edited: false, blob: null, mime: 'image/jpeg', width: SIZE, height: SIZE } : null;
+            sourceMode: 'auto', sourceName: '', zoom: 1, x: 0, y: 0, edited: false, blob: null, mime: 'image/jpeg', width: SIZE, height: SIZE } : null;
         editor.artwork = state;
         summary();
         if (state?.thumbnailUrl) pendingLoad = load(state); else pendingLoad = null;
@@ -162,6 +198,15 @@ const NicoPocketArtwork = (() => {
         canvas.focus({ preventScroll: true }); draw();
     }
     edit.addEventListener('click', () => { void open(); });
+    localSource.addEventListener('click', () => localFile.click());
+    localFile.addEventListener('change', () => {
+        const file = localFile.files?.[0];
+        localFile.value = '';
+        if (file) pendingLoad = loadLocalFile(file);
+    });
+    autoSource.addEventListener('click', () => {
+        if (state?.thumbnailUrl) pendingLoad = load(state);
+    });
     document.getElementById('artwork-cancel').addEventListener('click', () => dialog.close());
     dialog.addEventListener('close', () => {
         void chrome.runtime.sendMessage({ kind: 'np:editor-modal', open: false, ...modalContext }).catch(() => {});

@@ -43,6 +43,11 @@
         <div class="section-heading"><h2 id="artwork-heading">Artwork</h2><span id="artwork-state" class="status-pill">未設定</span></div>
         <div class="cover-preview"><img id="artwork-image" alt="現在の動画のサムネイル" referrerpolicy="no-referrer" hidden /><span id="artwork-empty">サムネイル未取得</span></div>
         <p id="artwork-note">元のサムネイルです。1:1の正方形に編集できます。</p>
+        <div class="artwork-source-actions">
+          <button id="artwork-auto-source" class="secondary full" type="button" disabled>動画サムネイルに戻す</button>
+          <button id="artwork-local-source" class="secondary full" type="button" disabled>ローカル画像を選択</button>
+          <input id="artwork-local-file" type="file" accept="image/jpeg,image/png,image/webp" hidden />
+        </div>
         <button id="artwork-edit" class="secondary full" type="button" disabled>Artworkを編集</button>
       </aside>
       <div class="action-row download-actions"><button id="download" class="primary full" type="button" aria-describedby="save-status" disabled>Download</button><button id="metadata-edit" class="secondary full" type="button" disabled>メタデータを編集</button><button id="cancel-download" class="secondary full" type="button" hidden>キャンセル</button></div>

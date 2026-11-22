@@ -1,5 +1,5 @@
-# このファイルの除外ルールは、Chrome/ と Safari/ を含む
-# リポジトリ内のすべてのサブディレクトリへ再帰的に適用します。
+# このファイルの除外ルールは、nico_downloader/ を含む
+# NicoPocket リポジトリ内のすべてのサブディレクトリへ再帰的に適用します。
 
 # macOS
 **/.DS_Store
@@ -17,6 +17,9 @@
 # Codex and agent-local settings
 **/.codex/
 **/.agents/
+**/.antigravity/
+**/.gemini/
+**/.claude/
 **/AGENTS.local.md
 
 # Environment variables and local configuration
@@ -37,8 +40,17 @@
 **/*.crt
 **/*.der
 **/*.mobileprovision
+**/*.secret
+**/.npmrc
+**/.netrc
+**/id_rsa
+**/id_rsa.*
+**/id_ed25519
+**/id_ed25519.*
 **/credentials.json
+**/*credentials*.json
 **/secrets.json
+**/secrets.*
 
 # Logs, temporary files, and caches
 **/*.log
@@ -53,6 +65,8 @@
 # JavaScript dependencies and build output
 **/node_modules/
 **/dist/
+!nico_downloader/dist/
+!nico_downloader/dist/**
 **/build/
 **/coverage/
 **/.nyc_output/

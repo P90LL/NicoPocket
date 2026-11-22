@@ -6,6 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { loadScript, resolveRepoPath } from './helpers/load-script.mjs';
 
 const EXT_DIR = resolveRepoPath('nico_downloader');
+const TESTS_DIR = resolveRepoPath('tests');
 
 function walkFiles(dir, extensions) {
     const results = [];
@@ -20,9 +21,12 @@ function walkFiles(dir, extensions) {
     return results.sort();
 }
 
-test('all JavaScript files under nico_downloader/ pass node --check', () => {
-    const jsFiles = walkFiles(EXT_DIR, ['.js']);
-    assert.ok(jsFiles.length > 0, 'Expected to find JavaScript files in nico_downloader/');
+test('all JavaScript files under nico_downloader/ and tests/ pass node --check', () => {
+    const jsFiles = [
+        ...walkFiles(EXT_DIR, ['.js']),
+        ...walkFiles(TESTS_DIR, ['.mjs', '.js']),
+    ];
+    assert.ok(jsFiles.length > 0, 'Expected to find JavaScript files in nico_downloader/ and tests/');
     for (const filePath of jsFiles) {
         execFileSync(process.execPath, ['--check', filePath], { stdio: 'pipe' });
     }
@@ -124,9 +128,9 @@ test('NicoPocketPolicy.artworkAllowedHosts matches manifest.json host_permission
     assert.deepEqual(policyHosts, manifestHosts);
 });
 
-test('nicovideodownloader_scripts.js does not contain legacy documentWriteText or window.onload', () => {
+test('pocket/download-runner.js does not contain legacy documentWriteText or window.onload', () => {
     const scriptContent = fs.readFileSync(
-        resolveRepoPath('nico_downloader/nicovideodownloader_scripts.js'),
+        resolveRepoPath('nico_downloader/pocket/download-runner.js'),
         'utf8'
     );
     assert.equal(/\bdocumentWriteText\b/.test(scriptContent), false);

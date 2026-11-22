@@ -5,5 +5,14 @@ globalThis.NicoPocketPolicy = Object.freeze({
     artworkJpegQuality: 0.9,
     artworkInputMaxBytes: 10 * 1024 * 1024,
     artworkMaxBytes: 2 * 1024 * 1024,
-    saveIdleTimeoutMs: 10 * 60 * 1000
+    saveIdleTimeoutMs: 10 * 60 * 1000,
+    artworkAllowedHosts: Object.freeze(['nicovideo.cdn.nimg.jp', 'tn.smilevideo.jp']),
+    normalizeThumbnailUrl(value) {
+        if (typeof value !== 'string') return '';
+        try {
+            const url = new URL(value);
+            if (url.protocol !== 'https:' || url.username || url.password || url.port) return '';
+            return NicoPocketPolicy.artworkAllowedHosts.includes(url.hostname.toLowerCase()) ? url.href : '';
+        } catch { return ''; }
+    }
 });

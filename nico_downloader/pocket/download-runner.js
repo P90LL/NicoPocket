@@ -38,23 +38,21 @@ async function VideoDown(request) {
     if (!Nicovideo.video_title) Nicovideo.video_title = request.job.title || Nicovideo.GetPageTitle() || Nicovideo.video_sm;
     if (request && !request.isCurrent()) return false;
 
-    await new Promise(async (resolve, reject) => {
-        // sm番号かタイトルが取得できなかったら終了
-        if (Nicovideo.video_sm == "" || Nicovideo.video_title == "")
-            reject("video_sm or video_title is null");
+    // sm番号かタイトルが取得できなかったら終了
+    if (Nicovideo.video_sm == "" || Nicovideo.video_title == "") {
+        throw new Error("video_sm or video_title is null");
+    }
 
-        // Output names come only from the owned editor job, never legacy format preferences.
-        if (!request.isCurrent()) { reject(new Error('取得元動画が切り替わりました。')); return; }
-        const video_name = NicoDownloader.VideoDownloadNameMake(Nicovideo.video_sm, Nicovideo.video_title);
-        Nicovideo.video_name = video_name;
-        //DebugPrint("video_name:" + Nicovideo.video_name);
+    // Output names come only from the owned editor job, never legacy format preferences.
+    if (!request.isCurrent()) {
+        throw new Error('取得元動画が切り替わりました。');
+    }
+    const video_name = NicoDownloader.VideoDownloadNameMake(Nicovideo.video_sm, Nicovideo.video_title);
+    Nicovideo.video_name = video_name;
+    //DebugPrint("video_name:" + Nicovideo.video_name);
 
-        // すでに作ったリンクがあるかどうか判別し、あれば削除
-        NicoDownloader.VideoTitleElementCheck(Nicovideo.video_sm);
-
-        // resolve
-        resolve();
-    });
+    // すでに作ったリンクがあるかどうか判別し、あれば削除
+    NicoDownloader.VideoTitleElementCheck(Nicovideo.video_sm);
     DebugPrint("video_name:" + Nicovideo.video_name);
 
     //ダウンロードリンクの表示
@@ -72,10 +70,15 @@ async function VideoDown(request) {
 
 
             //ダウンロード前のチェック処理
-            if (NicoDownloader.CheckBeforeDownload() == false)
+            if (NicoDownloader.CheckBeforeDownload() == false) {
                 reject("CheckBeforeDownload ERROR");
+                return;
+            }
 
-            if (NicoDownloader.VideoDownloadingCheck()) reject("Now Downloading"); //ダウンロード中は終了
+            if (NicoDownloader.VideoDownloadingCheck()) {
+                reject("Now Downloading"); //ダウンロード中は終了
+                return;
+            }
 
             // resolve
             resolve();
@@ -97,9 +100,13 @@ async function VideoDown(request) {
                 //delivery.domand.nicovideo.jpの処理はこちら！
                 if (masterURL.indexOf("delivery.domand.nicovideo.jp") != -1) {
                     // ダウンロード処理
-                    MovieDownload_domand(Nicovideo, NicoDownloader).then(() => {
-                        NicoDownloader.VideoDownloadingReset(); // ダウンロード中をリセット
-                    });
+                    MovieDownload_domand(Nicovideo, NicoDownloader)
+                        .catch((err) => {
+                            DebugPrint(err);
+                        })
+                        .finally(() => {
+                            NicoDownloader.VideoDownloadingReset(); // ダウンロード中をリセット
+                        });
 
                     NicoDownloader.VideoLoadedSMIDSet(Nicovideo.video_sm); // ダウンロードしたsm番号を記録
                 }
@@ -115,8 +122,6 @@ async function VideoDown(request) {
 let interval1st = false;
 let intervalId;
 try {
-    clearInterval(intervalId);
-
     // Phase 1: 2秒ごとにNicoPocketの編集ボタンを配置
     intervalId = setInterval(() => {
         if (interval1st) {

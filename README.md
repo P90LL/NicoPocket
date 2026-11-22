@@ -54,8 +54,11 @@
 
 - [利用ガイド](USER_GUIDE.md): 保存操作、各編集画面、プリセット、JSONバックアップ、トラブル対応
 - [現行仕様](SPECIFICATION.md): 出力形式、音質選択、タグ、状態管理、権限の正確な条件
+- [Upstream 境界アーキテクチャ](docs/architecture/UPSTREAM_BOUNDARY.md): 3層境界設計とフォーク元（`upstream/v4`）選択的同期の標準手順
 - [開発記録](docs/development/): Phaseごとの変更、合成検証、実サイト確認の記録
 - [Phase 10完成監査](docs/development/FINAL_AUDIT.md): Phase 10時点の監査。Phase 11以降の変更は含みません
+
+ローカルでの構文・静的整合性・単体テスト一括検証は `node --test tests/*.test.mjs` で実行できます。
 
 過去のPhase・FIX文書は作業時点の状態を残しています。現行仕様と異なる古い保存形式や保留事項を含む場合があります。
 

@@ -31,8 +31,16 @@
             }
             if (message.stage !== 'end' || target.received !== target.size || issued.has(state.id)) return { ok: false };
             // Reject raw audio renamed as M4A before creating any downloadable Blob URL.
-            const head = target.chunks[0];
-            if (!head || head.length < 12 || String.fromCharCode(...head.subarray(4, 8)) !== 'ftyp') {
+            const header = new Uint8Array(12);
+            let filled = 0;
+            for (const chunk of target.chunks) {
+                if (!chunk || !chunk.length) continue;
+                const copyLen = Math.min(12 - filled, chunk.length);
+                header.set(chunk.subarray(0, copyLen), filled);
+                filled += copyLen;
+                if (filled >= 12) break;
+            }
+            if (filled < 12 || String.fromCharCode(...header.subarray(4, 8)) !== 'ftyp') {
                 release(); return { ok: false };
             }
             issued.add(state.id);

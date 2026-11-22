@@ -136,3 +136,27 @@ test('pocket/download-runner.js does not contain legacy documentWriteText or win
     assert.equal(/\bdocumentWriteText\b/.test(scriptContent), false);
     assert.equal(/\bwindow\.onload\b/.test(scriptContent), false);
 });
+
+test('local script, stylesheet, and image references in HTML files exist on disk', () => {
+    const htmlFiles = [
+        resolveRepoPath('nico_downloader/options.html'),
+        resolveRepoPath('nico_downloader/pocket/window.html'),
+    ];
+    const attrPattern = /<(?:script|link|img)\b[^>]*?\b(?:src|href)="([^"]+)"/gi;
+
+    for (const htmlPath of htmlFiles) {
+        const html = fs.readFileSync(htmlPath, 'utf8');
+        const dir = path.dirname(htmlPath);
+        const matches = [...html.matchAll(attrPattern)];
+        assert.ok(matches.length > 0, `Expected asset references in ${path.relative(EXT_DIR, htmlPath)}`);
+
+        for (const [, rawRef] of matches) {
+            if (/^(?:https?:|data:|#)/i.test(rawRef)) continue;
+            const resolved = path.resolve(dir, rawRef);
+            assert.ok(
+                fs.existsSync(resolved) && fs.statSync(resolved).isFile(),
+                `Missing asset "${rawRef}" referenced in ${path.relative(EXT_DIR, htmlPath)}`
+            );
+        }
+    }
+});

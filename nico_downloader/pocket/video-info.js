@@ -2,10 +2,7 @@
 const NicoPocketVideo = (() => {
     const currentId = () => /^\/watch\/([a-zA-Z0-9]+)\/?$/.exec(location.pathname)?.[1];
     function imageUrl(value) {
-        try {
-            const url = new URL(value);
-            return url.protocol === 'https:' ? url.href : '';
-        } catch { return ''; }
+        return NicoPocketPolicy.normalizeThumbnailUrl(value);
     }
     async function readCurrent() {
         const videoId = currentId();

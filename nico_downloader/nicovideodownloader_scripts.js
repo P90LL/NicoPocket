@@ -135,19 +135,6 @@ try {
     console.error('NicoPocket: 起動ボタンの配置に失敗しました。');
 }
 
-//ページ表示時発火処理
-window.onload = function () {
-    Option_setLoading("video_downloading"); // デフォルト保存名の読み込み
-};
-
-function documentWriteText(URItext) {
-    document.getElementById(VideoData.Video_DLlink.a).innerHTML =
-        VideoData.DLButton.a +
-        VideoData.DLButton.b +
-        URItext +
-        VideoData.DLButton.c;
-}
-
 /**
  *
  * @param {NicovideoClass} Nicovideo

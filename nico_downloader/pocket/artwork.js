@@ -112,9 +112,9 @@ const NicoPocketArtwork = (() => {
         loading = true; summary();
         const deadline = setTimeout(() => request.abort(), 20000);
         try {
-            const url = new URL(target.thumbnailUrl);
-            if (url.protocol !== 'https:' || url.username || url.password) throw new Error('画像URLを確認できませんでした。');
-            const response = await fetch(url.href, { credentials: 'omit', referrerPolicy: 'no-referrer', signal: request.signal });
+            const safeUrl = NicoPocketPolicy.normalizeThumbnailUrl(target.thumbnailUrl);
+            if (!safeUrl) throw new Error('画像URLを確認できませんでした。');
+            const response = await fetch(safeUrl, { credentials: 'omit', referrerPolicy: 'no-referrer', signal: request.signal });
             if (!response.ok) throw new Error('画像を取得できませんでした。');
             const blob = await response.blob();
             if (blob.size > NicoPocketPolicy.artworkInputMaxBytes) throw new Error('画像サイズが大きすぎます。');

@@ -56,7 +56,7 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
         videoTags: NicoPocketMetadata.normalizeTags(data.videoTags),
         series: typeof data.series === 'string' ? data.series.trim().slice(0, 500) : '',
         registeredAt: typeof data.registeredAt === 'string' ? data.registeredAt.trim().slice(0, 100) : '',
-        thumbnailUrl: /^https:\/\//.test(data.thumbnailUrl) ? data.thumbnailUrl : '',
+        thumbnailUrl: NicoPocketPolicy.normalizeThumbnailUrl(data.thumbnailUrl),
         audioQualities: data.audioQualities.slice(0, 30).map(audio => ({
             id: typeof audio?.id === 'string' ? audio.id.slice(0, 100) : '',
             available: audio?.available === true,
@@ -279,7 +279,10 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
 chrome.windows.onRemoved.addListener(windowId => {
     void chrome.storage.session.get('np:editorWindowId').then(stored => {
         if (stored['np:editorWindowId'] === windowId) {
-            modalUpdates = modalUpdates.catch(() => {}).then(unlockModalSource);
+            modalUpdates = modalUpdates.catch(() => {}).then(async () => {
+                await chrome.storage.session.remove('np:editorWindowId');
+                await unlockModalSource();
+            });
             return modalUpdates;
         }
     }).catch(() => {});

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { resolveRepoPath } from './helpers/load-script.mjs';
+import { loadScript, resolveRepoPath } from './helpers/load-script.mjs';
 
 const EXT_DIR = resolveRepoPath('nico_downloader');
 
@@ -106,4 +106,29 @@ test('no Git conflict markers remain in text files under nico_downloader/', () =
             `Git conflict marker detected in nico_downloader/${rel}`
         );
     }
+});
+
+test('NicoPocketPolicy.artworkAllowedHosts matches manifest.json host_permissions hosts', () => {
+    const manifest = JSON.parse(
+        fs.readFileSync(resolveRepoPath('nico_downloader/manifest.json'), 'utf8')
+    );
+    const manifestHosts = (manifest.host_permissions ?? [])
+        .map(pattern => new URL(pattern.replace(/\/\*$/, '/')).hostname.toLowerCase())
+        .sort();
+
+    const { exported } = loadScript('nico_downloader/pocket/policy.js', {
+        exportNames: ['NicoPocketPolicy'],
+    });
+    const policyHosts = [...(exported.NicoPocketPolicy.artworkAllowedHosts ?? [])].sort();
+
+    assert.deepEqual(policyHosts, manifestHosts);
+});
+
+test('nicovideodownloader_scripts.js does not contain legacy documentWriteText or window.onload', () => {
+    const scriptContent = fs.readFileSync(
+        resolveRepoPath('nico_downloader/nicovideodownloader_scripts.js'),
+        'utf8'
+    );
+    assert.equal(/\bdocumentWriteText\b/.test(scriptContent), false);
+    assert.equal(/\bwindow\.onload\b/.test(scriptContent), false);
 });

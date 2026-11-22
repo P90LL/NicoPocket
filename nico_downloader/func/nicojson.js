@@ -294,6 +294,8 @@ nicovideo.SetAllFromVideoSm('sm9').then(() => {
 // 残さねばならない変数
 let Nicovideo______Ndl______DataLoadedSMID = '-1'; // データを取得した動画のsmid
 const metadataWarnings = new Set();
+const currentDecoratedVideoId = fallback => typeof location?.pathname === "string"
+    ? location.pathname.match(/^\/watch\/(sm[0-9]+)\/?$/)?.[1] ?? "" : fallback;
 let Nicovideo______Ndl______DataLoadedJSON = {}; // JSONデータ   
 
 class NicovideoClass {
@@ -308,6 +310,7 @@ class NicovideoClass {
         this.mylist_count = 0; // マイリスト数
         this.like_count = 0; // いいね数
         this.page_counts = {}; // 同じ動画IDのページ情報から補完した件数
+        this.page_counts_video_id = ''; // page_countsが紐づく動画ID
         this.video_title = ''; // タイトル
         this.video_owner = ''; // 投稿ユーザー
         this.video_registeredAt = ''; // 登録日時
@@ -374,6 +377,20 @@ class NicovideoClass {
                 if ((data.video?.id ?? data.client?.watchId) === video_sm) return json;
             } catch { /* 同じ動画IDと確認できる埋め込み情報だけを使う。 */ }
         }
+        const hasDecoratedPage = this.ReadDecoratedPageMetadata(video_sm);
+        const hasPrimaryMetadata = Boolean(
+            this.video_title || this.video_owner || this.video_genre || this.video_series || this.video_registeredAt
+        );
+        if (hasDecoratedPage && hasPrimaryMetadata) {
+            const count = { ...this.page_counts };
+            const video = { id: video_sm, title: this.video_title || this.GetPageTitle(),
+                registeredAt: this.video_registeredAt, count };
+            return { meta: { status: 200 }, data: { video,
+                owner: this.video_owner ? { nickname: this.video_owner } : {},
+                genre: this.video_genre ? { label: this.video_genre } : {},
+                series: this.video_series ? { title: this.video_series } : {},
+            } };
+        }
         const lazy = globalThis.NicoWatchMetadata?.get(video_sm);
         if (lazy) return { meta: { status: 200 }, data: { video: { id: video_sm },
             owner: { nickname: lazy.owner }, series: { title: lazy.series } } };
@@ -391,6 +408,10 @@ class NicovideoClass {
     }
     //constructorの各変数をセット
     SetAll(json = this.json) {
+        if (this.page_counts_video_id !== this.video_sm) {
+            this.page_counts = {};
+            this.page_counts_video_id = this.video_sm;
+        }
         this.view_count = this.JsonToViewCount(json);
         this.comment_count = this.JsonToCommentCount(json);
         this.mylist_count = this.JsonToMylistCount(json);
@@ -464,6 +485,7 @@ class NicovideoClass {
     GetPageTitle() {
         // ショートでは先読みカードや前の動画のmeta情報を参照しない。
         const candidates = IsShortVideoPage() ? [this.GetShortVideoTitle(), document.title] : [
+            document.querySelector("main h1.fs_xl.fw_bold")?.textContent,
             document.querySelector("h1")?.textContent,
             document.querySelector('meta[property="og:title"]')?.getAttribute("content"),
             document.querySelector('meta[name="twitter:title"]')?.getAttribute("content"),
@@ -521,6 +543,64 @@ class NicovideoClass {
         return this.GetVideo(json).description ?? ""; // 説明文
     }
 
+    // DOMで描画された同一動画の詳細root内から空欄項目を補完する。
+    ReadDecoratedPageMetadata(videoId = this.video_sm) {
+        if (!/^sm[0-9]+$/.test(videoId) || currentDecoratedVideoId(videoId) !== videoId) return false;
+        if (this.page_counts_video_id && this.page_counts_video_id !== videoId) this.page_counts = {};
+        this.page_counts_video_id = videoId;
+        const directChild = (parent, tagName) => Array.from(parent?.children ?? [])
+            .find(element => element.tagName?.toUpperCase() === tagName);
+        let description;
+        const root = [...document.querySelectorAll("[data-decoration-video-id]")].find(element => {
+            if (element.getAttribute("data-decoration-video-id") !== videoId) return false;
+            const pressable = Array.from(element.children ?? []).find(child =>
+                child.tagName?.toUpperCase() === "DIV" && child.classList?.contains("Pressable"));
+            const body = directChild(pressable, "P");
+            if (body) {
+                description = body;
+                return true;
+            }
+            return Boolean(directChild(element, "DL"));
+        });
+        if (!root) return false;
+        const fillText = (key, value) => {
+            const text = typeof value === "string" ? value.trim() : "";
+            if ((this[key] == null || this[key] === "") && text) this[key] = text;
+        };
+        const dl = directChild(root, "DL");
+        const rows = Array.from(dl?.children ?? []);
+        const rowFor = label => rows.find(row => directChild(row, "DT")?.textContent?.trim() === label);
+        const valueFor = label => directChild(rowFor(label), "DD");
+        fillText("video_title", this.GetPageTitle());
+        const dateTime = directChild(valueFor("投稿日時"), "TIME")?.getAttribute("datetime");
+        fillText("video_registeredAt", dateTime);
+        const countFields = {
+            "再生": ["view", "view_count"],
+            "コメント": ["comment", "comment_count"],
+            "いいね！": ["like", "like_count"],
+            "マイリスト": ["mylist", "mylist_count"],
+        };
+        const rawCounts = this.GetWatchData(this.json).video?.count ?? {};
+        for (const [label, [sourceKey, field]] of Object.entries(countFields)) {
+            const rawValue = rawCounts[sourceKey];
+            if (rawValue != null && rawValue !== "") continue;
+            if (this.page_counts[sourceKey] != null && this.page_counts[sourceKey] !== "") continue;
+            const displayed = directChild(valueFor(label), "SPAN")?.textContent?.trim() ?? "";
+            const digits = displayed.replace(/,/g, "");
+            if (!/^\d+$/.test(digits)) continue;
+            const count = Number(digits);
+            if (!Number.isSafeInteger(count) || count < 0) continue;
+            this.page_counts[sourceKey] = count;
+            if (this[field] == null || this[field] === "" || this[field] === 0) this[field] = count;
+        }
+        const links = Array.from(root.querySelectorAll("a[href]")).filter(link => !description?.contains?.(link));
+        const linkText = predicate => links.find(link => predicate(link.getAttribute("href") ?? "") && link.textContent?.trim())?.textContent;
+        fillText("video_genre", linkText(href => href.startsWith("/video_top/genre/")));
+        fillText("video_series", linkText(href => /^\/series\/[^/]+\/?$/.test(href)));
+        fillText("video_owner", linkText(href => /^\/user\/\d+\/?$/.test(href)));
+        return true;
+    }
+
     //jsonよりタグを取得
     JsonToTags(json = this.json) {
         const data = this.GetWatchData(json);
@@ -541,6 +621,7 @@ class NicovideoClass {
     // 追加通信はせず、同じ動画IDの埋め込み情報から欠けた項目だけ補う。
     CompletePageMetadata() {
         if (/^ss[0-9]+$/.test(this.video_sm)) return;
+        this.ReadDecoratedPageMetadata();
         const getters = { video_title: "JsonToTitle", video_owner: "JsonToUser", video_registeredAt: "JsonToRegisteredAt",
             video_description: "JsonToDescription", video_tags: "JsonToTags", video_genre: "JsonToGenre", video_series: "JsonToSeries" };
         const empty = value => value == null || value === "" || (Array.isArray(value) && !value.length);

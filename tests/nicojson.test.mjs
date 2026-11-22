@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { loadScript } from './helpers/load-script.mjs';
+import { loadScripts } from './helpers/load-script.mjs';
 
 const toHost = value => JSON.parse(JSON.stringify(value));
 
@@ -109,18 +109,24 @@ function createNicojsonEnv({
         querySelectorAll: sel => querySelectorAllMap[sel] ?? [],
     };
 
-    const { sandbox, exported } = loadScript('nico_downloader/func/nicojson.js', {
-        globals: {
-            chrome: { runtime: { id: 'test-ext-id' } },
-            crypto: { randomUUID: () => 'test-client-uuid' },
-            location,
-            window: windowObj,
-            document: documentObj,
-            IsShortVideoPage: () => false,
-            DebugPrint: () => {},
-        },
-        exportNames: ['NicovideoClass', 'NicoWatchMetadata'],
-    });
+    const { sandbox, exported } = loadScripts(
+        [
+            'nico_downloader/pocket/watch-metadata-bridge.js',
+            'nico_downloader/func/nicojson.js',
+        ],
+        {
+            globals: {
+                chrome: { runtime: { id: 'test-ext-id' } },
+                crypto: { randomUUID: () => 'test-client-uuid' },
+                location,
+                window: windowObj,
+                document: documentObj,
+                IsShortVideoPage: () => false,
+                DebugPrint: () => {},
+            },
+            exportNames: ['NicovideoClass', 'NicoWatchMetadata'],
+        }
+    );
 
     return {
         sandbox,

@@ -150,7 +150,7 @@ test('no personal local home paths or signed HLS delivery token URLs are hardcod
 
 test('.gitignore protects nico_downloader/dist/ assets while ignoring .vscode/settings.json and .env', () => {
     const mustNotIgnore = [
-        'nico_downloader/dist/utils.js',
+        'nico_downloader/dist/ffmpeg-core2.js',
         'nico_downloader/dist/ffmpeg-core.wasm',
     ];
     for (const relPath of mustNotIgnore) {

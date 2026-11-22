@@ -30,5 +30,27 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Run static checks and unit tests
+      - name: Validate workflow YAML and test script syntax
+        run: |
+          ruby -ryaml -e "YAML.safe_load(File.read('.github/workflows/ci.yml'))"
+          for f in tests/*.mjs tests/helpers/*.mjs; do node --check "$f" || exit 1; done
+
+      - name: Run static integrity, security hygiene, and upstream boundary checks
+        run: |
+          node --test --test-reporter=spec \
+            tests/static-integrity.test.mjs \
+            tests/security-hygiene.test.mjs \
+            tests/upstream-boundary.test.mjs
+
+      - name: Run core logic unit tests
+        run: |
+          node --test --test-reporter=spec \
+            tests/policy.test.mjs \
+            tests/title.test.mjs \
+            tests/metadata.test.mjs \
+            tests/audio-quality.test.mjs \
+            tests/presets.test.mjs \
+            tests/nicojson.test.mjs
+
+      - name: Run full test suite guard
         run: node --test tests/*.test.mjs

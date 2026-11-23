@@ -34,6 +34,7 @@
 
 ## 更新履歴
 
+- 2026-11-23: upstream/v4（b36a21f）からのメタデータ補完の選択的取り込み、upstream衝突モジュールの`nico_downloader/pocket/`への分離、サムネイル許可ホスト検証・エラー時ロック解放・分割チャンク`ftyp`検証の強化、外部依存ゼロのNode.jsテストスイートとGitHub Actions CIの整備を実施しました。表示バージョンと内部バージョンは変更していません。
 - 2026-10-27（未リリース）: Artworkにローカル画像を選ぶ方法を追加しました。動画サムネイルの自動取得と切り替えられ、既存のトリミング操作を利用できます。
 - 2026-10-20（未リリース）: Chrome拡張機能内の音質・Artwork・保存待ちに関する固定値を共通化し、Artworkの描画処理を整理しました。表示バージョンと内部バージョンは変更していません。
 - 2026-10-14: 現行の動作と利用方法に合わせてREADME、利用ガイド、仕様を整理しました。
@@ -50,6 +51,27 @@
 
 症状別の対応は[利用ガイドの「困ったとき」](USER_GUIDE.md#困ったとき)を参照してください。
 
+## 構成と自動検証
+
+リポジトリは以下のディレクトリ構成で管理されています。
+
+- `nico_downloader/`: Chromeに読み込む拡張機能本体（NicoPocket独自実装は`nico_downloader/pocket/`に分離）
+- `tests/`: 外部パッケージ依存なしのNode.js標準テストスイート（構文・Manifest/HTML整合性・セキュリティ衛生・upstream境界・コアロジック単体テスト）
+- `.github/workflows/ci.yml`: PR・push時に自動実行されるGitHub Actions CI（Node.js 22）
+- `docs/`: 境界アーキテクチャ設計（`docs/architecture/`）およびPhase別開発記録（`docs/development/`）
+
+ローカルでの自動テスト（Node.js 22推奨）は以下のコマンドで実行できます。
+
+```bash
+# 全テストの一括実行
+node --test tests/*.test.mjs
+
+# 詳細レポーター付きでの実行
+node --test --test-reporter=spec tests/*.test.mjs
+```
+
+なお、本テストスイートは構文・静的整合性・単体ロジックの回帰検知を目的としたものであり、実際のニコニコ動画サイトでの動作確認の代替にはなりません。
+
 ## ドキュメント
 
 - [利用ガイド](USER_GUIDE.md): 保存操作、各編集画面、プリセット、JSONバックアップ、トラブル対応
@@ -57,8 +79,6 @@
 - [Upstream 境界アーキテクチャ](docs/architecture/UPSTREAM_BOUNDARY.md): 3層境界設計とフォーク元（`upstream/v4`）選択的同期の標準手順
 - [開発記録](docs/development/): Phaseごとの変更、合成検証、実サイト確認の記録
 - [Phase 10完成監査](docs/development/FINAL_AUDIT.md): Phase 10時点の監査。Phase 11以降の変更は含みません
-
-ローカルでの構文・静的整合性・単体テスト一括検証は `node --test tests/*.test.mjs` で実行できます。
 
 過去のPhase・FIX文書は作業時点の状態を残しています。現行仕様と異なる古い保存形式や保留事項を含む場合があります。
 
